@@ -6,14 +6,13 @@ import { RAGBadge, ProgressBar } from '../components/RAGBadge'
 
 const REFRESH_INTERVAL = 60_000
 
-// ── helper hitung D-day ───────────────────────────────────────────────────
 function daysUntil(dateStr) {
   if (!dateStr) return null
   const diff = new Date(dateStr) - new Date(new Date().toDateString())
   return Math.round(diff / 86400000)
 }
 
-// ── Timeline Calendar ─────────────────────────────────────────────────────
+// ── Timeline Calendar (tidak berubah) ────────────────────────────────────
 function CalendarTimeline({ calendar = [] }) {
   const seen = new Set()
   const rows = calendar.filter(c => {
@@ -22,7 +21,6 @@ function CalendarTimeline({ calendar = [] }) {
     seen.add(key)
     return true
   })
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
       {rows.map((c, i) => {
@@ -61,54 +59,172 @@ function CalendarTimeline({ calendar = [] }) {
   )
 }
 
-// ── OJK 9 Aktivitas ───────────────────────────────────────────────────────
+// ── OJK Activities — NEW: Stage-based timeline view ──────────────────────
+const PHASE_COLOR = {
+  'Pre-Cutover':          { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Pre-Cutover (lanjutan)': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Cutover':              { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
+  'Post-Cutover':         { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
+}
+
+const STATUS_STYLE = {
+  IN_PROGRESS:  { bg: '#FEF9C3', color: '#854D0E', label: 'On Going'    },
+  NOT_STARTED:  { bg: '#F1F5F9', color: '#64748B', label: 'Not Started' },
+  DONE:         { bg: '#DCFCE7', color: '#15803D', label: 'Done'        },
+}
+
 function OJKActivities({ activities = [] }) {
-  const [open, setOpen] = useState(null)
-  const statusStyle = {
-    IN_PROGRESS: { bg: '#EFF6FF', color: '#1D4ED8', label: 'On Going' },
-    NOT_STARTED: { bg: '#F8FAFC', color: '#64748B', label: 'Not Started'    },
-    DONE:        { bg: '#F0FDF4', color: '#16A34A', label: 'Done'     },
+  const [openStage, setOpenStage] = useState(null)
+  const [openDay,   setOpenDay]   = useState({})
+
+  const toggleStage = (no) => {
+    setOpenStage(prev => prev === no ? null : no)
+    setOpenDay({})
   }
+
+  const toggleDay = (stageNo, dayIdx) => {
+    const key = `${stageNo}-${dayIdx}`
+    setOpenDay(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      {activities.map((a) => {
-        const isOpen = open === a.no
-        const ss = statusStyle[a.status] || statusStyle.NOT_STARTED
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {activities.map((stage) => {
+        const isOpen  = openStage === stage.no
+        const ss      = STATUS_STYLE[stage.status] || STATUS_STYLE.NOT_STARTED
+        const pc      = PHASE_COLOR[stage.phase]   || PHASE_COLOR['Cutover']
+
         return (
-          <div key={a.no}>
+          <div key={stage.no} style={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+
+            {/* Stage header — clickable */}
             <div
-              onClick={() => setOpen(isOpen ? null : a.no)}
+              onClick={() => toggleStage(stage.no)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 14px',
-                borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                background: isOpen ? '#F1F5F9' : '#F8FAFC',
-                border: '1px solid #F1F5F9',
-                cursor: 'pointer', transition: 'background .15s',
+                padding: '12px 14px', cursor: 'pointer',
+                background: isOpen ? '#F8FAFC' : '#fff',
+                transition: 'background .15s',
               }}
             >
+              {/* Stage badge */}
               <div style={{
-                width: '26px', height: '26px', borderRadius: '7px',
-                background: '#01847C', color: '#fff', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '11px', fontWeight: '700',
+                flexShrink: 0, borderRadius: '8px', padding: '4px 8px',
+                background: '#0F172A', color: '#fff',
+                fontSize: '10px', fontWeight: '700', whiteSpace: 'nowrap',
               }}>
-                {a.no}
+                {stage.stage}
               </div>
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{a.name}</span>
-              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '99px', background: ss.bg, color: ss.color, whiteSpace: 'nowrap' }}>
+
+              {/* Period */}
+              <span style={{
+                fontSize: '11px', color: '#64748B', fontFamily: 'monospace',
+                whiteSpace: 'nowrap', flexShrink: 0,
+              }}>
+                {stage.period}
+              </span>
+
+              {/* Title */}
+              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A', minWidth: 0 }}>
+                {stage.title}
+              </span>
+
+              {/* Phase pill */}
+              <span style={{
+                fontSize: '10px', fontWeight: '600', padding: '2px 8px',
+                borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0,
+                background: pc.bg, color: pc.text, border: `1px solid ${pc.border}`,
+              }}>
+                {stage.phase}
+              </span>
+
+              {/* Status pill */}
+              <span style={{
+                fontSize: '10px', fontWeight: '700', padding: '2px 8px',
+                borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0,
+                background: ss.bg, color: ss.color,
+              }}>
                 {ss.label}
               </span>
-              <span style={{ fontSize: '12px', color: '#94A3B8', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s', width: '14px', textAlign: 'center' }}>›</span>
+
+              {/* Chevron */}
+              <span style={{
+                fontSize: '13px', color: '#94A3B8', flexShrink: 0,
+                transform: isOpen ? 'rotate(90deg)' : 'none',
+                transition: 'transform .2s',
+              }}>›</span>
             </div>
+
+            {/* Days breakdown — shown when stage is open */}
             {isOpen && (
-              <div style={{ background: '#FAFAFA', border: '1px solid #F1F5F9', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '8px 14px 10px 50px' }}>
-                {a.details.map((d, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: i < a.details.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#CBD5E1', flexShrink: 0 }} />
-                    <span style={{ fontSize: '12px', color: '#64748B' }}>{d}</span>
-                  </div>
-                ))}
+              <div style={{ borderTop: '1px solid #F1F5F9', background: '#FAFAFA' }}>
+                {stage.days.map((day, di) => {
+                  const dayKey    = `${stage.no}-${di}`
+                  const isDayOpen = openDay[dayKey]
+                  return (
+                    <div key={di} style={{ borderBottom: di < stage.days.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+
+                      {/* Day row */}
+                      <div
+                        onClick={() => toggleDay(stage.no, di)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '10px',
+                          padding: '10px 14px 10px 46px', cursor: 'pointer',
+                          background: isDayOpen ? '#F1F5F9' : 'transparent',
+                          transition: 'background .12s',
+                        }}
+                      >
+                        {/* Date chip */}
+                        <div style={{
+                          flexShrink: 0, fontSize: '11px', fontWeight: '600',
+                          color: '#475569', fontFamily: 'monospace',
+                          background: '#E2E8F0', borderRadius: '6px',
+                          padding: '2px 8px', whiteSpace: 'nowrap',
+                        }}>
+                          {day.date}
+                        </div>
+
+                        {/* Timeline dot + line */}
+                        <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                          <div style={{
+                            width: '8px', height: '8px', borderRadius: '50%',
+                            background: '#01847C', border: '2px solid #fff',
+                            boxShadow: '0 0 0 2px #01847C',
+                          }} />
+                        </div>
+
+                        <span style={{ flex: 1, fontSize: '12px', fontWeight: '600', color: '#334155' }}>
+                          {day.label}
+                        </span>
+
+                        <span style={{
+                          fontSize: '11px', color: '#94A3B8',
+                          transform: isDayOpen ? 'rotate(90deg)' : 'none',
+                          transition: 'transform .2s',
+                        }}>›</span>
+                      </div>
+
+                      {/* Activity list — shown when day is open */}
+                      {isDayOpen && (
+                        <div style={{ padding: '6px 14px 10px 80px', background: '#F8FAFC' }}>
+                          {day.activities.map((act, ai) => (
+                            <div key={ai} style={{
+                              display: 'flex', alignItems: 'flex-start', gap: '8px',
+                              padding: '5px 0',
+                              borderBottom: ai < day.activities.length - 1 ? '1px solid #F1F5F9' : 'none',
+                            }}>
+                              <span style={{
+                                width: '5px', height: '5px', borderRadius: '50%',
+                                background: '#01847C', flexShrink: 0, marginTop: '5px',
+                              }} />
+                              <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>{act}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -118,7 +234,7 @@ function OJKActivities({ activities = [] }) {
   )
 }
 
-// ── Main Dashboard ────────────────────────────────────────────────────────
+// ── Main Dashboard (semua bagian lain tidak berubah) ──────────────────────
 export default function DashboardPage({ user, onLogout }) {
   const [data,        setData]        = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -175,7 +291,6 @@ export default function DashboardPage({ user, onLogout }) {
         boxShadow: '0 1px 8px rgba(0,0,0,.06)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Logo tanpa import file gambar */}
           <div style={{
             width: '40px', height: '40px', borderRadius: '10px',
             background: '#01847C', display: 'flex', alignItems: 'center',
@@ -192,13 +307,11 @@ export default function DashboardPage({ user, onLogout }) {
             <span style={{ width: '8px', height: '8px', background: '#16A34A', borderRadius: '50%', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
             <span style={{ fontSize: '12px', color: '#16A34A', fontWeight: '600' }}>Live</span>
           </div>
-
           {lastRefresh && (
             <span style={{ fontSize: '12px', color: '#94A3B8' }}>
               Update: {lastRefresh.toLocaleTimeString('id-ID')}
             </span>
           )}
-
           <button onClick={handleDownload} disabled={downloading} style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '8px 16px', border: 'none', borderRadius: '10px',
@@ -208,7 +321,6 @@ export default function DashboardPage({ user, onLogout }) {
           }}>
             {downloading ? '⏳' : '⬇️'} Download PDF
           </button>
-
           <div style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px',
@@ -226,7 +338,6 @@ export default function DashboardPage({ user, onLogout }) {
               <div style={{ fontSize: '11px', color: '#64748B' }}>{user?.institution}</div>
             </div>
           </div>
-
           <button
             onClick={() => { sessionStorage.removeItem('neom_token'); onLogout() }}
             style={{
@@ -256,7 +367,6 @@ export default function DashboardPage({ user, onLogout }) {
         <div style={{ position: 'absolute', inset: 0, opacity: .05,
           backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)',
           backgroundSize: '32px 32px' }} />
-
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div>
@@ -389,8 +499,8 @@ export default function DashboardPage({ user, onLogout }) {
           </div>
         </div>
 
-        {/* ── ROW 3 BARU: Timeline + OJK Activities ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px', marginBottom: '24px' }}>
+        {/* ── ROW 3: Timeline + OJK Activities (updated) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '20px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Timeline NEOM</h2>
@@ -401,8 +511,18 @@ export default function DashboardPage({ user, onLogout }) {
 
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>9 Aktivitas Utama OJK</h2>
-              <span style={{ fontSize: '11px', color: '#94A3B8' }}>klik untuk detail teknis</span>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas per Stage — OJK View</h2>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {[
+                  { bg: '#EFF6FF', text: '#1D4ED8', label: 'Pre-Cutover' },
+                  { bg: '#FFF7ED', text: '#C2410C', label: 'Cutover'     },
+                  { bg: '#F0FDF4', text: '#15803D', label: 'Post'        },
+                ].map(p => (
+                  <span key={p.label} style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '99px', background: p.bg, color: p.text }}>
+                    {p.label}
+                  </span>
+                ))}
+              </div>
             </div>
             <OJKActivities activities={acts} />
           </div>

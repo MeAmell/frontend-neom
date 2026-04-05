@@ -167,7 +167,7 @@ function RegionalBreakdown({ branches }) {
   })
 
   const rows = Object.entries(map).sort((a, b) => b[1].total - a[1].total)
-  if (rows.length === 0) return <div style={{ fontSize: '12px', color: C.muted }}>Belum ada data</div>
+  if (rows.length === 0) return <div style={{ fontSize: '12px', color: C.muted }}>Not Started ada data</div>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
@@ -353,7 +353,7 @@ function ChannelPanel({ data, channelName, accentColor }) {
         <MiniStat label="Pass Rate"    value={`${passedPct}%`}                        sub="dari total submit"       color={C.teal}   icon="📊" />
         <MiniStat label="Fail Rate"    value={`${data.total_branches > 0 ? Math.round((data.failed / data.total_branches) * 100) : 0}%`} sub={`${data.failed} branch gagal`}  color={C.failed} icon="⚠️" />
         <MiniStat label="Avg TC Gagal" value={avgTCFailed}                             sub="per branch failed"       color="#E8A030"  icon="🔍" />
-        <MiniStat label="Belum Mulai"  value={data.not_started}                        sub={`dari ${data.total_branches} total`} color={C.slate}  icon="⏳" />
+        <MiniStat label="Not Started Mulai"  value={data.not_started}                        sub={`dari ${data.total_branches} total`} color={C.slate}  icon="⏳" />
       </div>
 
       {/* ── Two-column: top issues + regional breakdown ── */}

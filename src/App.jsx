@@ -2,6 +2,7 @@ import { useAuth } from './hooks/useAuth'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import BranchTestingPage from './pages/BranchTestingPage'
+import FDRMasterPage from './pages/FDRMasterPage'
 import { useState } from 'react'
 import bsiLogo from './assets/bsi_logo.png'
 
@@ -61,8 +62,9 @@ export default function App() {
           {/* Nav items */}
           <nav style={{ flex: 1, padding: '12px 10px' }}>
             {[
-              { key: 'ojk',    label: 'OJK Dashboard',  desc: 'Progress upgrade'  },
-              { key: 'branch', label: 'Branch Testing',  desc: 'EXA & T24 Browser' },
+              { key: 'ojk',    label: 'OJK Dashboard',      desc: 'Progress upgrade'   },
+              { key: 'branch', label: 'Branch Testing',      desc: 'EXA & T24 Browser'  },
+              { key: 'fdr',    label: 'Dashboard Master FDR', desc: 'FDR Overview & Activities' },
             ].map(item => (
               <button
                 key={item.key}
@@ -114,7 +116,9 @@ export default function App() {
         <div style={{ marginLeft: '200px', flex: 1, minWidth: 0 }}>
           {activePage === 'ojk'
             ? <DashboardPage user={user} onLogout={logout} hideSidebar />
-            : <BranchTestingPage user={user} onLogout={logout} hideSidebar />
+            : activePage === 'branch'
+            ? <BranchTestingPage user={user} onLogout={logout} hideSidebar />
+            : <FDRMasterPage user={user} hideSidebar />
           }
         </div>
       </div>
