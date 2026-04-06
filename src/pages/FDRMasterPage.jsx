@@ -1,133 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { RAGBadge, ProgressBar } from '../components/RAGBadge'
+import { fetchFDRProgress } from '../utils/api'
 
 const REFRESH_INTERVAL = 60_000
 
 // ── Static Stage Data ─────────────────────────────────────────────────────────
-const STAGE_DATA = [
-  {
-    name: 'STAGE 0',
-    status: 'DONE',
-    pct: 100,
-    completed: 4, inProgress: 0, notStarted: 0,
-    activities: [
-      { activity: 'All surrounding pointing dari R24 regression to R10', status: 'Done Delayed' },
-      { activity: 'COB', status: 'Done On-track (Ahead)' },
-      { activity: 'Restore EXADATA to Mockrun4 condition (after Pre-Cutover 2) for Historical Big Table', status: 'Done Delayed' },
-      { activity: 'Setup ADG Secondary (Rempoa)', status: 'N/A Not Applicable' },
-      { activity: 'Setup & Synchronize ADG Recon (DCI)', status: 'Done Delayed' },
-    ],
-  },
-  {
-    name: 'STAGE 1',
-    status: 'DONE',
-    pct: 100,
-    completed: 3, inProgress: 0, notStarted: 0,
-    activities: [
-      { activity: 'Install Delta Jurnal Logging', status: 'Done On-track' },
-      { activity: 'R10 Production Copy Online (Browser, TWS, TC, SFTP)', status: 'Done On-track' },
-      { activity: 'PreReq Cutover dan DB Preparation', status: 'Done On-track (Ahead)' },
-    ],
-  },
-  {
-    name: 'STAGE 2',
-    status: 'DONE',
-    pct: 100,
-    completed: 16, inProgress: 0, notStarted: 0,
-    activities: [
-      { activity: 'Stop Job Contractual Surrounding System + Sanity Testing', status: 'Done On-track (Ahead)' },
-      { activity: 'Sanity Testing After Stop Job Contractual (PTR)', status: 'Done On-track (Ahead)' },
-      { activity: 'All Table + Delta Big Tables Migration', status: 'Done On-track (Ahead)' },
-      { activity: 'Reconcile Checkpoint 3', status: 'Done Delayed' },
-      { activity: 'Go/No Go Checkpoint 3', status: 'Done Delayed' },
-      { activity: 'T24 Upgrade', status: 'Done On-track (Ahead)' },
-      { activity: 'Get Data R10 for Reconcile Checkpoint 4', status: 'Done On-track (Ahead)' },
-      { activity: 'T24 Run Conversion', status: 'Done On-track (Ahead)' },
-      { activity: 'Authorization', status: 'Done On-track (Ahead)' },
-      { activity: 'Cut ADG DB Reconciliation', status: 'Done On-track (Ahead)' },
-      { activity: 'Reconcile Checkpoint 4 by Tools (IT)', status: 'Done On-track (Ahead)' },
-      { activity: 'Reconcile Checkpoint 4 by Output (User)', status: 'Done On-track (Ahead)' },
-      { activity: 'Deployment L3 Retrofitted', status: 'Done On-track (Ahead)' },
-      { activity: 'Indexing All Tables & Execute SP & Function', status: 'Done On-track (Ahead)' },
-      { activity: 'Go/No Go Checkpoint 4', status: 'Done On-track (Ahead)' },
-      { activity: 'R10 Production Copy Offline + Surrounding', status: 'Done On-track (Ahead)' },
-    ],
-  },
-  {
-    name: 'STAGE 3',
-    status: 'DONE',
-    pct: 100,
-    completed: 5, inProgress: 0, notStarted: 0,
-    activities: [
-      { activity: 'Delta Migration', status: '#REF!' },
-      { activity: 'Update HVT Flag', status: 'Done Delayed' },
-      { activity: 'R24-PreProd Go-Live (Internal Access)', status: 'Done Delayed' },
-      { activity: 'Extract R24 Data', status: 'Done Delayed' },
-      { activity: 'Repointing Surrounding to ESB Core Prod to be R24', status: 'Done On-track (Ahead)' },
-    ],
-  },
-  {
-    name: 'STAGE 4',
-    status: 'IN_PROGRESS',
-    pct: 82.6,
-    completed: 7, inProgress: 1, notStarted: 1,
-    activities: [
-      { activity: 'Final Reconcile Checkpoint 5 by Tools (IT)', status: 'Done Delayed' },
-      { activity: 'R24-PreProd Go-Live (Open Public Access)', status: 'N/A Not Applicable' },
-      { activity: 'Start Job Contractual Surrounding System, Sanity Testing', status: 'Done Delayed' },
-      { activity: 'Checkpoint Start Eye Balling Reconcile & PTR', status: 'N/A Not Applicable' },
-      { activity: 'Eye Balling Reconcile Checkpoint 5 (User)', status: 'Done Delayed' },
-      { activity: 'Preparation Data & Device PTR', status: 'Done Delayed' },
-      { activity: 'PTR', status: 'Done Delayed' },
-      { activity: 'Go/No Go Checkpoint 5', status: 'In Progress Delayed' },
-      { activity: 'Go Live & R24-Preprod First COB', status: 'Not Started Delayed' },
-    ],
-  },
-  {
-    name: 'STAGE 5',
-    status: 'NOT_STARTED',
-    pct: 0,
-    completed: 0, inProgress: 0, notStarted: 1,
-    activities: [
-      { activity: 'Close Sub Account', status: 'Not Started Delayed' },
-    ],
-  },
-]
-
-const COMPLETED_ACTIVITIES = [
-  { stage: 'STAGE 0', activity: 'All surrounding pointing dari R24 regression to R10', plan_start: '03/03/2026 13:00', plan_end: '03/03/2026 16:00', actual_start: '03/03/2026 13:00', actual_end: '03/05/2026 10:19', progress_status: 'Delayed' },
-  { stage: 'STAGE 0', activity: 'COB', plan_start: '03/03/2026 23:00', plan_end: '03/04/2026 02:00', actual_start: '03/03/2026 22:00', actual_end: '03/04/2026 01:00', progress_status: 'On-track (Ahead)' },
-  { stage: 'STAGE 0', activity: 'Restore EXADATA to Mockrun4 condition', plan_start: '03/03/2026 16:00', plan_end: '03/04/2026 14:00', actual_start: '03/04/2026 06:00', actual_end: '03/05/2026 11:00', progress_status: 'Delayed' },
-  { stage: 'STAGE 0', activity: 'Setup & Synchronize ADG Recon (DCI)', plan_start: '03/04/2026 16:00', plan_end: '03/05/2026 14:00', actual_start: '03/05/2026 15:30', actual_end: '03/06/2026 15:00', progress_status: 'Delayed' },
-  { stage: 'STAGE 1', activity: 'Install Delta Jurnal Logging', plan_start: '03/05/2026 15:00', plan_end: '03/05/2026 15:20', actual_start: '03/05/2026 15:00', actual_end: '03/05/2026 15:20', progress_status: 'On-track' },
-  { stage: 'STAGE 1', activity: 'R10 Production Copy Online', plan_start: '03/05/2026 15:20', plan_end: '03/05/2026 15:30', actual_start: '03/05/2026 15:20', actual_end: '03/05/2026 15:30', progress_status: 'On-track' },
-  { stage: 'STAGE 1', activity: 'PreReq Cutover dan DB Preparation', plan_start: '03/05/2026 15:40', plan_end: '03/05/2026 17:40', actual_start: '03/05/2026 11:00', actual_end: '03/05/2026 15:30', progress_status: 'On-track (Ahead)' },
-  { stage: 'STAGE 2', activity: 'Stop Job Contractual Surrounding System', plan_start: '03/05/2026 15:30', plan_end: '03/05/2026 17:30', actual_start: '03/05/2026 15:45', actual_end: '03/05/2026 16:09', progress_status: 'On-track (Ahead)' },
-  { stage: 'STAGE 2', activity: 'T24 Upgrade', plan_start: '03/06/2026 02:50', plan_end: '03/06/2026 10:50', actual_start: '03/06/2026 02:46', actual_end: '03/06/2026 07:09', progress_status: 'On-track (Ahead)' },
-  { stage: 'STAGE 2', activity: 'T24 Run Conversion', plan_start: '03/06/2026 11:00', plan_end: '03/06/2026 17:00', actual_start: '03/06/2026 07:18', actual_end: '03/06/2026 13:05', progress_status: 'On-track (Ahead)' },
-  { stage: 'STAGE 3', activity: 'Update HVT Flag', plan_start: '03/07/2026 10:40', plan_end: '03/07/2026 11:00', actual_start: '03/07/2026 12:56', actual_end: '03/07/2026 13:07', progress_status: 'Delayed' },
-  { stage: 'STAGE 3', activity: 'R24-PreProd Go-Live (Internal Access)', plan_start: '03/07/2026 11:10', plan_end: '03/07/2026 11:40', actual_start: '03/07/2026 15:00', actual_end: '03/07/2026 16:10', progress_status: 'Delayed' },
-  { stage: 'STAGE 4', activity: 'Final Reconcile Checkpoint 5 by Tools (IT)', plan_start: '03/07/2026 12:10', plan_end: '03/07/2026 12:40', actual_start: '03/07/2026 12:56', actual_end: '03/07/2026 14:22', progress_status: 'Delayed' },
-  { stage: 'STAGE 4', activity: 'PTR', plan_start: '03/07/2026 13:00', plan_end: '03/07/2026 15:00', actual_start: '03/07/2026 16:10', actual_end: '03/07/2026 18:10', progress_status: 'Delayed' },
-  { stage: 'STAGE 4', activity: 'Go/No Go Checkpoint 5', plan_start: '03/07/2026 16:00', plan_end: '03/07/2026 17:30', actual_start: '03/07/2026 19:10', actual_end: '03/07/2026 --:--', progress_status: 'Delayed' },
-]
-
-const META = {
-  target_completion: '08/Mar/26 02:10',
-  remaining_time: '0:00:00',
-  overall_status: 'DELAYED',
-  pct_progress: 93.36,
-}
-
-// ── Derived summary numbers ───────────────────────────────────────────────────
-const totalActs     = STAGE_DATA.reduce((s, st) => s + st.activities.length, 0)
-const completedActs = STAGE_DATA.reduce((s, st) => s + st.completed, 0)
-const inProgressActs = STAGE_DATA.reduce((s, st) => s + st.inProgress, 0)
-const notStartedActs = STAGE_DATA.reduce((s, st) => s + st.notStarted, 0)
-const completedPct  = (completedActs  / totalActs) * 100
-const inProgressPct = (inProgressActs / totalActs) * 100
-const notStartedPct = (notStartedActs / totalActs) * 100
-
 // ── Status helpers ────────────────────────────────────────────────────────────
 function statusStyle(s = '') {
   const sl = (s || '').toLowerCase()
@@ -284,7 +161,7 @@ function StageCard({ stage, active, onClick }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#01847C', fontWeight: '600' }}>✓ {stage.completed} selesai</span>
-          {stage.inProgress > 0 && <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ {stage.inProgress} berjalan</span>}
+          {stage.inProgress > 0 && <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ {stage.inProgress} ON PROGRESS</span>}
           {stage.notStarted > 0 && <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '600' }}>○ {stage.notStarted} belum</span>}
         </div>
         <span style={{ fontSize: '11px', color: active ? '#01847C' : '#94A3B8', fontWeight: '600' }}>
@@ -489,26 +366,6 @@ function parseDate(str) {
   return new Date(`${y}-${m}-${d}T${timePart || '00:00'}`)
 }
 
-// All activities flattened from both STAGE_DATA activities + COMPLETED_ACTIVITIES timing
-const ALL_ACTIVITIES = STAGE_DATA.flatMap(stage =>
-  stage.activities.map(act => {
-    const comp = COMPLETED_ACTIVITIES.find(
-      c => c.stage === stage.name && c.activity.startsWith(act.activity.slice(0, 20))
-    )
-    return {
-      stage: stage.name,
-      stageStatus: stage.status,
-      activity: act.activity,
-      status: act.status,
-      plan_start:   comp?.plan_start   || null,
-      plan_end:     comp?.plan_end     || null,
-      actual_start: comp?.actual_start || null,
-      actual_end:   comp?.actual_end   || null,
-      progress_status: comp?.progress_status || null,
-    }
-  })
-)
-
 const STAGE_COLORS = {
   'STAGE 0': '#6366F1',
   'STAGE 1': '#0EA5E9',
@@ -691,25 +548,42 @@ function ActivityRow({ act, index }) {
 }
 
 // ── DetailAktivitas — main section ────────────────────────────────────────────
-function DetailAktivitas() {
+function DetailAktivitas({ items = [] }) {
   const [view,          setView]          = useState('detail')   // 'detail' | 'ringkas'
   const [filterStage,   setFilterStage]   = useState('ALL')
   const [filterStatus,  setFilterStatus]  = useState('ALL')
   const [search,        setSearch]        = useState('')
 
-  const stages = ['ALL', ...STAGE_DATA.map(s => s.name)]
+  const stageNames = [...new Set(items.map(r => r.Stage).filter(Boolean))].sort()
+  const stages = ['ALL', ...stageNames]
   const statusGroups = ['ALL', 'Done', 'In Progress', 'Not Started', 'Delayed', 'N/A']
 
-  const filtered = ALL_ACTIVITIES.filter(a => {
+  // Map Excel rows → same shape as old ALL_ACTIVITIES
+  const allActivities = items.map(r => ({
+    stage:           r.Stage || '',
+    stageStatus:     r.Status || '',
+    activity:        r.Activity || '',
+    status:          r.Status || '',
+    plan_start:      r['Planned Start Time'] ? new Date(r['Planned Start Time']).toLocaleString('id-ID') : null,
+    plan_end:        r['Planned End Time']   ? new Date(r['Planned End Time']).toLocaleString('id-ID')   : null,
+    actual_start:    r['Actual Start Time']  ? new Date(r['Actual Start Time']).toLocaleString('id-ID')  : null,
+    actual_end:      r['Actual End Time']    ? new Date(r['Actual End Time']).toLocaleString('id-ID')    : null,
+    progress_status: r.Remarks || null,
+    event:           r.Event || '',
+    timeline:        r.Timeline || '',
+    is_parallel:     r['Is Parallel'] || false,
+    planned_dur:     r['Planned Duration'] || null,
+    actual_dur:      r['Actual Duration'] || null,
+  }))
+
+  const filtered = allActivities.filter(a => {
     const matchStage  = filterStage  === 'ALL' || a.stage === filterStage
     const matchStatus = filterStatus === 'ALL' || a.status.toLowerCase().includes(filterStatus.toLowerCase())
     const matchSearch = !search || a.activity.toLowerCase().includes(search.toLowerCase())
     return matchStage && matchStatus && matchSearch
   })
 
-  // Counts for filter badges
-  const countByStage = s => ALL_ACTIVITIES.filter(a => a.stage === s).length
-  const doneCount    = filtered.filter(a => a.status.toLowerCase().includes('done') || (a.progress_status && !a.status.toLowerCase().includes('not started') && !a.status.toLowerCase().includes('in progress'))).length
+  const countByStage = s => allActivities.filter(a => a.stage === s).length
 
   return (
     <div style={{ background: '#fff', borderRadius: '20px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', overflow: 'hidden' }}>
@@ -724,7 +598,7 @@ function DetailAktivitas() {
           <div>
             <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Detail Aktivitas</h2>
             <p style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>
-              Menampilkan <strong style={{ color: '#0F172A' }}>{filtered.length}</strong> dari {ALL_ACTIVITIES.length} aktivitas
+              Menampilkan <strong style={{ color: '#0F172A' }}>{filtered.length}</strong> dari {allActivities.length} aktivitas
             </p>
           </div>
 
@@ -877,11 +751,54 @@ function DetailAktivitas() {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function FDRMasterPage({ user, onLogout }) {
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [fdrData,     setFdrData]     = useState(null)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState(null)
+
+  const loadData = useCallback(async () => {
+    try {
+      const data = await fetchFDRProgress()
+      setFdrData(data)
+      setLastRefresh(new Date())
+      setError(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    const t = setInterval(() => setLastRefresh(new Date()), REFRESH_INTERVAL)
+    loadData()
+    const t = setInterval(loadData, REFRESH_INTERVAL)
     return () => clearInterval(t)
-  }, [])
+  }, [loadData])
+
+  // ── Derive display values from API data ──────────────────────────────────
+  const items       = fdrData?.items      || []
+  const overall     = fdrData?.overall    || {}
+  const stages      = fdrData?.stages     || []
+  const timelines   = fdrData?.timelines  || []
+
+  const completedActs   = overall.done        || 0
+  const inProgressActs  = overall.in_progress || 0
+  const notStartedActs  = overall.not_started || 0
+  const totalActs       = overall.total       || 1
+  const completedPct    = overall.done_pct    || 0
+  const inProgressPct   = overall.in_progress_pct || 0
+  const notStartedPct   = overall.not_started_pct || 0
+
+  // META derived from API
+  const overallPct = completedPct
+  const overallStatus = completedPct === 100 ? 'SELESAI' : inProgressPct > 0 ? 'ON PROGRESS' : 'BELUM MULAI'
+
+  if (loading && !fdrData) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F8', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ width: '40px', height: '40px', border: '4px solid #E2E8F0', borderTopColor: '#01847C', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <p style={{ color: '#64748B', fontSize: '14px' }}>Memuat data FDR dari Excel...</p>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
 
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column' }}>
@@ -998,14 +915,14 @@ export default function FDRMasterPage({ user, onLogout }) {
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '11px', fontWeight: '600', marginBottom: '6px' }}>OVERALL STATUS</div>
             <span style={{ padding: '6px 20px', borderRadius: '99px', background: '#DC2626', color: '#fff', fontWeight: '800', fontSize: '14px', display: 'inline-block' }}>
-              {META.overall_status}
+              {overallStatus}
             </span>
             <div style={{ marginTop: '10px', color: '#fff', fontFamily: 'monospace', fontSize: '32px', fontWeight: '800', lineHeight: 1 }}>
-              {META.pct_progress}%
+              {overallPct.toFixed(1)}%
             </div>
             <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '11px', marginTop: '2px' }}>Overall Progress</div>
             <div style={{ marginTop: '6px', color: 'rgba(255,255,255,.55)', fontSize: '11px', fontFamily: 'monospace' }}>
-              Target: {META.target_completion}
+              Target: FDR 3 — April 2026
             </div>
           </div>
         </div>
@@ -1112,38 +1029,41 @@ export default function FDRMasterPage({ user, onLogout }) {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
-            {STAGE_DATA.map((s, i) => {
-              const total = s.completed + s.inProgress + s.notStarted
-              const cPct = total > 0 ? (s.completed  / total) * 100 : 0
-              const iPct = total > 0 ? (s.inProgress / total) * 100 : 0
-              const nPct = total > 0 ? (s.notStarted / total) * 100 : 0
+            {loading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Memuat data...</div>
+            ) : error ? (
+              <div style={{ padding: '20px', color: '#DC2626', fontSize: '13px' }}>⚠ {error}</div>
+            ) : stages.map((s, i) => {
+              const cPct = s.done_pct        || 0
+              const iPct = s.in_progress_pct || 0
+              const nPct = s.not_started_pct || 0
+              const statusRaw = s.done === s.total && s.total > 0 ? 'DONE'
+                : s.in_progress > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
               const statusColor =
-                s.status === 'DONE'        ? '#01847C' :
-                s.status === 'IN_PROGRESS' ? '#E8A030' : '#94A3B8'
+                statusRaw === 'DONE'        ? '#01847C' :
+                statusRaw === 'IN_PROGRESS' ? '#E8A030' : '#94A3B8'
               const statusLabel =
-                s.status === 'DONE'        ? 'Completed' :
-                s.status === 'IN_PROGRESS' ? 'In Progress' : 'Not Started'
+                statusRaw === 'DONE'        ? 'Completed' :
+                statusRaw === 'IN_PROGRESS' ? 'In Progress' : 'Not Started'
               const statusBg =
-                s.status === 'DONE'        ? '#F0FDF9' :
-                s.status === 'IN_PROGRESS' ? '#FFFBEB' : '#F8FAFC'
+                statusRaw === 'DONE'        ? '#F0FDF9' :
+                statusRaw === 'IN_PROGRESS' ? '#FFFBEB' : '#F8FAFC'
 
               return (
                 <div key={i} style={{
                   padding: '18px 0',
-                  borderBottom: i < STAGE_DATA.length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < stages.length - 1 ? '1px solid #F1F5F9' : 'none',
                 }}>
-                  {/* Header row */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
-                    {/* Stage badge + name */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px' }}>
                       <div style={{
                         background: statusColor, color: '#fff',
                         borderRadius: '8px', padding: '4px 10px',
                         fontSize: '11px', fontWeight: '800', letterSpacing: '.3px', whiteSpace: 'nowrap',
                       }}>
-                        {s.name}
+                        {s.stage}
                       </div>
-                      {s.status === 'IN_PROGRESS' && (
+                      {statusRaw === 'IN_PROGRESS' && (
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: '4px',
                           background: '#FFFBEB', color: '#92400E',
@@ -1154,15 +1074,11 @@ export default function FDRMasterPage({ user, onLogout }) {
                         </span>
                       )}
                     </div>
-
-                    {/* Stacked bar — takes remaining space */}
                     <div style={{ flex: 1, height: '10px', borderRadius: '99px', overflow: 'hidden', background: '#F1F5F9', display: 'flex' }}>
                       {cPct > 0 && <div style={{ width: `${cPct}%`, background: '#01847C', transition: 'width 1s ease' }} />}
                       {iPct > 0 && <div style={{ width: `${iPct}%`, background: '#E8A030', transition: 'width 1s ease' }} />}
                       {nPct > 0 && <div style={{ width: `${nPct}%`, background: '#E2E8F0', transition: 'width 1s ease' }} />}
                     </div>
-
-                    {/* Status pill */}
                     <span style={{
                       padding: '4px 12px', borderRadius: '99px', fontSize: '11px', fontWeight: '700',
                       background: statusBg, color: statusColor,
@@ -1170,26 +1086,22 @@ export default function FDRMasterPage({ user, onLogout }) {
                     }}>
                       {statusLabel}
                     </span>
-
-                    {/* Percentage */}
                     <span style={{ fontSize: '20px', fontWeight: '800', color: statusColor, minWidth: '60px', textAlign: 'right' }}>
-                      {s.pct.toFixed(s.pct % 1 === 0 ? 0 : 1)}%
+                      {cPct.toFixed(cPct % 1 === 0 ? 0 : 1)}%
                     </span>
                   </div>
-
-                  {/* Sub-stats row */}
                   <div style={{ display: 'flex', gap: '20px', paddingLeft: '174px' }}>
                     <span style={{ fontSize: '12px', color: '#01847C', fontWeight: '600' }}>
-                      ● Completed: <strong>{cPct.toFixed(0)}%</strong>
+                      ● Completed: <strong>{s.done}</strong>
                     </span>
                     <span style={{ fontSize: '12px', color: '#E8A030', fontWeight: '600' }}>
-                      ● In Progress: <strong>{iPct.toFixed(0)}%</strong>
+                      ● In Progress: <strong>{s.in_progress}</strong>
                     </span>
                     <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '600' }}>
-                      ● Not Started: <strong>{nPct.toFixed(0)}%</strong>
+                      ● Not Started: <strong>{s.not_started}</strong>
                     </span>
                     <span style={{ fontSize: '12px', color: '#CBD5E1', marginLeft: 'auto', fontWeight: '500' }}>
-                      {total} aktivitas
+                      {s.total} aktivitas
                     </span>
                   </div>
                 </div>
@@ -1199,7 +1111,7 @@ export default function FDRMasterPage({ user, onLogout }) {
         </div>
 
         {/* ── ROW 4 + 5: Enhanced Detail Aktivitas ── */}
-        <DetailAktivitas />
+        <DetailAktivitas items={items} />
 
       </main>
 

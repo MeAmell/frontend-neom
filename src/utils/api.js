@@ -71,3 +71,23 @@ export async function downloadPDF() {
   pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 1.5, canvas.height / 1.5)
   pdf.save(`NEOM_Dashboard_${new Date().toISOString().slice(0, 10)}.pdf`)
 }
+// ── FDR Progress (Excel) ──────────────────────────────────────────────────────
+export async function fetchFDRProgress({ stage, timeline, status } = {}) {
+  const params = new URLSearchParams()
+  if (stage)    params.set('stage', stage)
+  if (timeline) params.set('timeline', timeline)
+  if (status)   params.set('status', status)
+  const qs = params.toString()
+  const res = await req(`/api/fdr-progress${qs ? '?' + qs : ''}`)
+  return res.json()
+}
+
+export async function fetchFDRStages() {
+  const res = await req('/api/fdr-progress/stages')
+  return res.json()
+}
+
+export async function reloadFDR() {
+  const res = await req('/api/fdr-progress/reload', { method: 'POST' })
+  return res.json()
+}
