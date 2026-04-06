@@ -884,7 +884,7 @@ export default function FDRMasterPage({ user, onLogout }) {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column' }}>
 
       {/* ── TOP NAV ── */}
       <nav style={{
@@ -1012,7 +1012,7 @@ export default function FDRMasterPage({ user, onLogout }) {
       </div>
 
       {/* ── MAIN BODY ── */}
-      <main style={{ padding: '28px 32px', flex: 1 }}>
+      <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
         {/* ── ROW 1: Donut card + 3 Summary Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
