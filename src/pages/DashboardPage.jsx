@@ -363,65 +363,110 @@ function TodayActivities({ activities = [] }) {
   )
 }
 
-// ─── OJK Activities ───────────────────────────────────────────────────────────
+// ─── OJK Activities — reads from FDR Excel stages ────────────────────────────
 const PHASE_COLOR = {
-  'Pre-Cutover':            { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
-  'Pre-Cutover (lanjutan)': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
-  'Cutover':                { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
-  'Post-Cutover':           { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
+  'Pre-Cutover':  { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Cutover':      { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
+  'Post-Cutover': { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
 }
-const STATUS_STYLE = {
+const OJK_STATUS = {
+  DONE:        { bg: '#DCFCE7', color: '#15803D', label: 'Done'        },
   IN_PROGRESS: { bg: '#FEF9C3', color: '#854D0E', label: 'On Going'    },
   NOT_STARTED: { bg: '#F1F5F9', color: '#64748B', label: 'Not Started' },
-  DONE:        { bg: '#DCFCE7', color: '#15803D', label: 'Done'        },
 }
 
-function OJKActivities({ activities = [] }) {
+function OJKActivities({ stages = [] }) {
   const [openStage, setOpenStage] = useState(null)
-  const [openDay,   setOpenDay]   = useState({})
+  const [openEvent, setOpenEvent] = useState({})
 
-  const toggleStage = (no) => { setOpenStage(p => p === no ? null : no); setOpenDay({}) }
-  const toggleDay   = (no, di) => { const k = `${no}-${di}`; setOpenDay(p => ({ ...p, [k]: !p[k] })) }
+  if (!stages.length) return (
+    <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
+      <div style={{ fontSize: '24px', marginBottom: '8px' }}>📊</div>
+      <p style={{ fontSize: '13px', fontWeight: '600' }}>Upload FDR Excel untuk melihat aktivitas</p>
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {activities.map((stage) => {
-        const isOpen = openStage === stage.no
-        const ss = STATUS_STYLE[stage.status] || STATUS_STYLE.NOT_STARTED
-        const pc = PHASE_COLOR[stage.phase]   || PHASE_COLOR['Cutover']
+      {stages.map((stage, si) => {
+        const isOpen = openStage === si
+        const ss     = OJK_STATUS[stage.ojk_status] || OJK_STATUS.NOT_STARTED
+        const pc     = PHASE_COLOR[stage.phase]      || PHASE_COLOR['Cutover']
+        const progPct = stage.progress_pct || 0
+
         return (
-          <div key={stage.no} style={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            <div onClick={() => toggleStage(stage.no)} style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '12px 14px', cursor: 'pointer',
-              background: isOpen ? '#F8FAFC' : '#fff', transition: 'background .15s',
-            }}>
-              <div style={{ flexShrink: 0, borderRadius: '8px', padding: '4px 8px', background: '#0F172A', color: '#fff', fontSize: '10px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+          <div key={si} style={{ borderRadius: '12px', border: `1px solid ${isOpen ? '#01847C30' : '#E2E8F0'}`, overflow: 'hidden', boxShadow: isOpen ? '0 2px 12px rgba(1,132,124,.08)' : 'none' }}>
+            {/* Stage header row */}
+            <div
+              onClick={() => setOpenStage(p => p === si ? null : si)}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', cursor: 'pointer', background: isOpen ? '#F8FFFE' : '#fff', transition: 'background .15s' }}
+            >
+              {/* Stage badge */}
+              <div style={{ flexShrink: 0, borderRadius: '8px', padding: '4px 10px', background: '#0F172A', color: '#fff', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>
                 {stage.stage}
               </div>
-              <span style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>{stage.period}</span>
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A', minWidth: 0 }}>{stage.title}</span>
-              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: pc.bg, color: pc.text, border: `1px solid ${pc.border}` }}>{stage.phase}</span>
-              <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: ss.bg, color: ss.color }}>{ss.label}</span>
-              <span style={{ fontSize: '13px', color: '#94A3B8', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
+              {/* Title */}
+              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A', minWidth: 0 }}>
+                {stage.title || stage.stage}
+              </span>
+              {/* Progress */}
+              <span style={{ fontSize: '12px', fontWeight: '800', color: progPct > 0 ? '#01847C' : '#94A3B8', whiteSpace: 'nowrap' }}>
+                {progPct}%
+              </span>
+              {/* Phase pill */}
+              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: pc.bg, color: pc.text, border: `1px solid ${pc.border}` }}>
+                {stage.phase}
+              </span>
+              {/* Status pill */}
+              <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: ss.bg, color: ss.color }}>
+                {ss.label}
+              </span>
+              <span style={{ fontSize: '14px', color: '#94A3B8', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
             </div>
+
+            {/* Progress bar under header */}
+            {progPct > 0 && (
+              <div style={{ height: '3px', background: '#F1F5F9' }}>
+                <div style={{ height: '100%', width: `${progPct}%`, background: '#01847C', transition: 'width .6s' }} />
+              </div>
+            )}
+
+            {/* Expanded: events from Excel */}
             {isOpen && (
-              <div style={{ borderTop: '1px solid #F1F5F9', background: '#FAFAFA' }}>
-                {(stage.days || []).map((day, di) => {
-                  const dayKey = `${stage.no}-${di}`
-                  const isDayOpen = openDay[dayKey]
+              <div style={{ borderTop: '1px solid #F1F5F9', background: '#FAFCFF' }}>
+                {(stage.events || []).length === 0 ? (
+                  <div style={{ padding: '16px 48px', fontSize: '12px', color: '#94A3B8' }}>Tidak ada event data</div>
+                ) : (stage.events || []).map((ev, ei) => {
+                  const evKey = `${si}-${ei}`
+                  const evOpen = openEvent[evKey]
+                  const evDone = ev.done || 0
+                  const evTotal = ev.total || 1
+                  const evProg = ev.progress_pct || ev.done_pct || 0
+                  const evColor = evProg >= 100 ? '#16A34A' : evProg > 0 ? '#E8A030' : '#94A3B8'
+
                   return (
-                    <div key={di} style={{ borderBottom: di < stage.days.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                      <div onClick={() => toggleDay(stage.no, di)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px 10px 46px', cursor: 'pointer', background: isDayOpen ? '#F1F5F9' : 'transparent', transition: 'background .12s' }}>
-                        <div style={{ flexShrink: 0, fontSize: '11px', fontWeight: '600', color: '#475569', fontFamily: 'monospace', background: '#E2E8F0', borderRadius: '6px', padding: '2px 8px', whiteSpace: 'nowrap' }}>{day.date}</div>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#01847C', border: '2px solid #fff', boxShadow: '0 0 0 2px #01847C', flexShrink: 0 }} />
-                        <span style={{ flex: 1, fontSize: '12px', fontWeight: '600', color: '#334155' }}>{day.label}</span>
-                        <span style={{ fontSize: '11px', color: '#94A3B8', transform: isDayOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
+                    <div key={ei} style={{ borderBottom: ei < stage.events.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      <div
+                        onClick={() => setOpenEvent(p => ({ ...p, [evKey]: !p[evKey] }))}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px 10px 44px', cursor: 'pointer', background: evOpen ? '#F1F5F9' : 'transparent', transition: 'background .12s' }}
+                      >
+                        {/* Event dot */}
+                        <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: evColor, flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: '12px', fontWeight: '600', color: '#334155' }}>{ev.event}</span>
+                        {/* Mini progress */}
+                        <span style={{ fontSize: '11px', color: evColor, fontWeight: '700', whiteSpace: 'nowrap' }}>
+                          {evDone}/{evTotal} done · {evProg}%
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#94A3B8', transform: evOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
                       </div>
-                      {isDayOpen && (
-                        <div style={{ padding: '6px 14px 10px 80px', background: '#F8FAFC' }}>
-                          {(day.activities || []).map((act, ai) => (
-                            <div key={ai} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '5px 0', borderBottom: ai < day.activities.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+
+                      {/* Activity list */}
+                      {evOpen && (
+                        <div style={{ padding: '4px 16px 12px 68px', background: '#F8FAFC' }}>
+                          {(ev.activity_list || []).length === 0 ? (
+                            <span style={{ fontSize: '12px', color: '#94A3B8' }}>Tidak ada aktivitas</span>
+                          ) : (ev.activity_list || []).map((act, ai) => (
+                            <div key={ai} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '5px 0', borderBottom: ai < ev.activity_list.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
                               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#01847C', flexShrink: 0, marginTop: '5px' }} />
                               <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>{act}</span>
                             </div>
@@ -431,6 +476,14 @@ function OJKActivities({ activities = [] }) {
                     </div>
                   )
                 })}
+
+                {/* Stage summary footer */}
+                <div style={{ padding: '10px 16px', display: 'flex', gap: '16px', background: '#F8FAFC', borderTop: '1px solid #F1F5F9' }}>
+                  <span style={{ fontSize: '11px', color: '#01847C', fontWeight: '600' }}>✓ Done: {stage.done}</span>
+                  <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ In Progress: {stage.in_progress}</span>
+                  <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '500' }}>○ Not Started: {stage.not_started}</span>
+                  <span style={{ fontSize: '11px', color: '#CBD5E1', marginLeft: 'auto' }}>{stage.total} aktivitas total</span>
+                </div>
               </div>
             )}
           </div>
@@ -585,9 +638,13 @@ export default function DashboardPage({ user, onLogout }) {
   // Displayed stages: FDR stages if available else OJK
   const displayStages = fdrStages.length > 0 ? fdrStages : ojkStages
 
-  // Filter stages if pill selected
+  // Filter stages by index (pill 0=Stage 0, 1=Stage 1, etc.)
   const filteredStages = filterStage !== null
-    ? displayStages.filter((_, i) => i === filterStage)
+    ? displayStages.filter((s, i) =>
+        i === filterStage ||
+        s.stage === `Stage ${filterStage}` ||
+        s.id === filterStage
+      )
     : displayStages
 
   return (
@@ -841,14 +898,21 @@ export default function DashboardPage({ user, onLogout }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas per Stage — OJK View</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>
+                Aktivitas per Stage — OJK View
+                {fdrStages.length > 0 && (
+                  <span style={{ fontSize: '11px', fontWeight: '500', color: '#94A3B8', marginLeft: '8px' }}>
+                    dari Excel FDR · {fdrStages.length} stage
+                  </span>
+                )}
+              </h2>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {[{ bg: '#EFF6FF', text: '#1D4ED8', label: 'Pre-Cutover' }, { bg: '#FFF7ED', text: '#C2410C', label: 'Cutover' }, { bg: '#F0FDF4', text: '#15803D', label: 'Post' }].map(p => (
                   <span key={p.label} style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '99px', background: p.bg, color: p.text }}>{p.label}</span>
                 ))}
               </div>
             </div>
-            <OJKActivities activities={acts} />
+            <OJKActivities stages={fdrStages.length > 0 ? fdrStages : []} />
           </div>
 
           {/* Detail Summary */}
