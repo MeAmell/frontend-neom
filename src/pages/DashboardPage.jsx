@@ -5,110 +5,432 @@ import StageBar from '../components/StageBar'
 import { RAGBadge, ProgressBar } from '../components/RAGBadge'
 
 const REFRESH_INTERVAL = 60_000
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
-// ── helper hitung D-day ───────────────────────────────────────────────────
+// ─── API helpers ──────────────────────────────────────────────────────────────
+async function fetchFDR() {
+  const token = sessionStorage.getItem('neom_token')
+  const res = await fetch(`${API_BASE}/api/fdr-progress/stages`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error('FDR fetch failed')
+  return res.json()
+}
+
+async function fetchFDRToday() {
+  const token = sessionStorage.getItem('neom_token')
+  const res = await fetch(`${API_BASE}/api/fdr-progress/today`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error('Today fetch failed')
+  return res.json()
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysUntil(dateStr) {
   if (!dateStr) return null
   const diff = new Date(dateStr) - new Date(new Date().toDateString())
   return Math.round(diff / 86400000)
 }
 
-// ── Timeline Calendar ─────────────────────────────────────────────────────
-function CalendarTimeline({ calendar = [] }) {
-  const seen = new Set()
-  const rows = calendar.filter(c => {
-    const key = c.label + c.type
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+function fmtDate(iso) {
+  if (!iso) return null
+  try { return new Date(iso) } catch { return null }
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  } catch { return '—' }
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' })
+  } catch { return '—' }
+}
+
+// ─── Status style ─────────────────────────────────────────────────────────────
+function statusStyle(s = '') {
+  const sl = (s || '').toLowerCase()
+  if (sl === 'done')         return { bg: '#DCFCE7', color: '#166534', dot: '#16A34A', label: 'Done' }
+  if (sl === 'in progress')  return { bg: '#FEF9C3', color: '#854D0E', dot: '#E8A030', label: 'In Progress' }
+  return                            { bg: '#F1F5F9', color: '#64748B', dot: '#94A3B8', label: 'Not Started' }
+}
+
+function StatusChip({ status }) {
+  const s = statusStyle(status)
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      background: s.bg, color: s.color, borderRadius: '99px',
+      padding: '3px 10px', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap',
+    }}>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
+      {s.label}
+    </span>
+  )
+}
+
+// ─── Gantt Chart Timeline ─────────────────────────────────────────────────────
+const GANTT_MILESTONES = [
+  { label: 'Pre-Cutover 1',  start: '2026-01-15', end: '2026-02-14', color: '#6366F1', phase: 'pre' },
+  { label: 'Pre-Cutover 2',  start: '2026-02-15', end: '2026-02-28', color: '#8B5CF6', phase: 'pre' },
+  { label: 'FDR 1',          start: '2026-02-17', end: '2026-02-21', color: '#0EA5E9', phase: 'fdr' },
+  { label: 'FDR 2',          start: '2026-03-05', end: '2026-03-08', color: '#0EA5E9', phase: 'fdr' },
+  { label: 'Cutover',        start: '2026-03-05', end: '2026-03-08', color: '#E8A030', phase: 'cut' },
+  { label: 'Post-Cutover',   start: '2026-03-08', end: '2026-05-08', color: '#01847C', phase: 'post' },
+  { label: 'Go-Live',        start: '2026-05-08', end: '2026-05-08', color: '#DC2626', phase: 'live', milestone: true },
+]
+
+function GanttTimeline() {
+  const today = new Date()
+  // Window: Jan 1 → Jun 30 2026
+  const windowStart = new Date('2026-01-01')
+  const windowEnd   = new Date('2026-06-30')
+  const totalMs = windowEnd - windowStart
+
+  const toX = (dateStr) => {
+    const d = new Date(dateStr)
+    const pct = Math.max(0, Math.min(100, ((d - windowStart) / totalMs) * 100))
+    return pct
+  }
+
+  const todayX = toX(today.toISOString())
+
+  // Month labels
+  const months = []
+  for (let m = 0; m <= 5; m++) {
+    const d = new Date(2026, m, 1)
+    months.push({
+      label: d.toLocaleDateString('id-ID', { month: 'short' }),
+      x: toX(d.toISOString()),
+    })
+  }
+
+  const rows = [
+    { key: 'pre',  label: 'Pre-Cutover',  bars: GANTT_MILESTONES.filter(m => m.phase === 'pre') },
+    { key: 'fdr',  label: 'FDR',          bars: GANTT_MILESTONES.filter(m => m.phase === 'fdr') },
+    { key: 'cut',  label: 'Cutover',      bars: GANTT_MILESTONES.filter(m => m.phase === 'cut') },
+    { key: 'post', label: 'Post-Cutover', bars: GANTT_MILESTONES.filter(m => m.phase === 'post') },
+    { key: 'live', label: 'Go-Live',      bars: GANTT_MILESTONES.filter(m => m.phase === 'live') },
+  ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-      {rows.map((c, i) => {
-        const isToday  = c.type === 'today'
-        const isGolive = c.type === 'golive'
-        const isPast   = c.type === 'past'
-        const d = daysUntil(c.date)
-        const dateLabel = new Date(c.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
-        return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#94A3B8', minWidth: '52px', flexShrink: 0 }}>
-              {dateLabel}
-            </span>
-            <div style={{
-              width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
-              background: isGolive ? '#DC2626' : isToday ? '#F59E0B' : isPast ? '#16A34A' : '#CBD5E1',
-              boxShadow: isToday ? '0 0 0 3px rgba(245,158,11,.25)' : 'none',
-            }} />
-            <span style={{
-              fontSize: '12px', flex: 1,
-              color: isGolive ? '#DC2626' : isToday ? '#0F172A' : isPast ? '#64748B' : '#475569',
-              fontWeight: isToday || isGolive ? '600' : '400',
-            }}>
-              {c.label}
-              {isToday && <span style={{ fontSize: '10px', marginLeft: '6px', color: '#F59E0B' }}>← hari ini</span>}
-            </span>
-            {isGolive && d !== null && (
-              <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px', background: '#FEE2E2', color: '#DC2626', whiteSpace: 'nowrap' }}>
-                D-{Math.abs(d)}
-              </span>
-            )}
+    <div style={{ padding: '0 4px' }}>
+      {/* Month ruler */}
+      <div style={{ position: 'relative', height: '28px', marginBottom: '6px', marginLeft: '88px' }}>
+        {months.map((m, i) => (
+          <div key={i} style={{
+            position: 'absolute', left: `${m.x}%`,
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            transform: 'translateX(-50%)',
+          }}>
+            <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: '600', whiteSpace: 'nowrap' }}>{m.label}</span>
+            <div style={{ width: '1px', height: '8px', background: '#E2E8F0', marginTop: '2px' }} />
           </div>
-        )
-      })}
+        ))}
+        {/* Today line on ruler */}
+        <div style={{
+          position: 'absolute', left: `${todayX}%`,
+          top: 0, bottom: 0, width: '2px',
+          background: 'rgba(220,38,38,.5)',
+          transform: 'translateX(-50%)',
+        }} />
+      </div>
+
+      {/* Gantt rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {rows.map(row => (
+          <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Row label */}
+            <div style={{
+              width: '80px', flexShrink: 0,
+              fontSize: '11px', fontWeight: '600', color: '#64748B',
+              textAlign: 'right',
+            }}>
+              {row.label}
+            </div>
+
+            {/* Track */}
+            <div style={{ flex: 1, height: '28px', position: 'relative', background: '#F8FAFC', borderRadius: '6px' }}>
+              {/* Grid lines */}
+              {months.map((m, i) => (
+                <div key={i} style={{
+                  position: 'absolute', left: `${m.x}%`, top: 0, bottom: 0,
+                  width: '1px', background: '#E2E8F0',
+                }} />
+              ))}
+
+              {/* Bars */}
+              {row.bars.map((bar, bi) => {
+                const x1 = toX(bar.start)
+                const x2 = toX(bar.end)
+                const w  = Math.max(x2 - x1, bar.milestone ? 0 : 0.5)
+                const isPast = new Date(bar.end) < today
+                const isActive = new Date(bar.start) <= today && new Date(bar.end) >= today
+
+                if (bar.milestone) {
+                  return (
+                    <div key={bi} title={`${bar.label}: ${fmtDateShort(bar.start)}`} style={{
+                      position: 'absolute', left: `${x1}%`, top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '14px', height: '14px',
+                      background: bar.color, borderRadius: '3px',
+                      rotate: '45deg',
+                      boxShadow: `0 0 0 3px ${bar.color}30`,
+                      zIndex: 2,
+                    }} />
+                  )
+                }
+
+                return (
+                  <div key={bi} title={`${bar.label}: ${fmtDateShort(bar.start)} → ${fmtDateShort(bar.end)}`} style={{
+                    position: 'absolute',
+                    left: `${x1}%`, width: `${w}%`,
+                    top: '6px', height: '16px',
+                    background: isPast
+                      ? `${bar.color}cc`
+                      : isActive
+                      ? bar.color
+                      : `${bar.color}55`,
+                    borderRadius: '4px',
+                    border: isActive ? `2px solid ${bar.color}` : 'none',
+                    boxShadow: isActive ? `0 2px 8px ${bar.color}40` : 'none',
+                    display: 'flex', alignItems: 'center', overflow: 'hidden',
+                    paddingLeft: '5px',
+                    cursor: 'default',
+                    zIndex: 1,
+                  }}>
+                    {w > 8 && (
+                      <span style={{ fontSize: '9px', fontWeight: '700', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        {bar.label}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* Today vertical line */}
+              <div style={{
+                position: 'absolute', left: `${todayX}%`, top: 0, bottom: 0,
+                width: '2px', background: '#DC2626',
+                transform: 'translateX(-50%)', zIndex: 3,
+              }}>
+                {/* dot at top */}
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626', marginLeft: '-2px' }} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: '16px', marginTop: '14px', marginLeft: '88px', flexWrap: 'wrap' }}>
+        {[
+          { color: '#6366F1', label: 'Pre-Cutover' },
+          { color: '#0EA5E9', label: 'FDR' },
+          { color: '#E8A030', label: 'Cutover' },
+          { color: '#01847C', label: 'Post-Cutover' },
+          { color: '#DC2626', label: 'Go-Live ◆' },
+        ].map(l => (
+          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ width: '12px', height: '6px', background: l.color, borderRadius: '2px', display: 'inline-block' }} />
+            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '500' }}>{l.label}</span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div style={{ width: '2px', height: '12px', background: '#DC2626' }} />
+          <span style={{ fontSize: '10px', color: '#DC2626', fontWeight: '600' }}>Hari Ini</span>
+        </div>
+      </div>
     </div>
   )
 }
 
-// ── OJK 9 Aktivitas ───────────────────────────────────────────────────────
-function OJKActivities({ activities = [] }) {
-  const [open, setOpen] = useState(null)
-  const statusStyle = {
-    IN_PROGRESS: { bg: '#EFF6FF', color: '#1D4ED8', label: 'On Going' },
-    NOT_STARTED: { bg: '#F8FAFC', color: '#64748B', label: 'Belum'    },
-    DONE:        { bg: '#F0FDF4', color: '#16A34A', label: 'Done'     },
+// ─── Today Activities section ─────────────────────────────────────────────────
+function TodayActivities({ activities = [] }) {
+  const today = new Date()
+  const todayLabel = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const doneCount    = activities.filter(a => a.status === 'Done').length
+  const inProgCount  = activities.filter(a => a.status === 'In Progress').length
+  const notStCount   = activities.filter(a => a.status === 'Not Started').length
+
+  if (activities.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
+        <div style={{ fontSize: '28px', marginBottom: '8px' }}>📅</div>
+        <p style={{ fontWeight: '600', fontSize: '13px' }}>Tidak ada aktivitas terjadwal hari ini</p>
+        <p style={{ fontSize: '12px', marginTop: '4px' }}>{todayLabel}</p>
+      </div>
+    )
   }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      {activities.map((a) => {
-        const isOpen = open === a.no
-        const ss = statusStyle[a.status] || statusStyle.NOT_STARTED
-        return (
-          <div key={a.no}>
-            <div
-              onClick={() => setOpen(isOpen ? null : a.no)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '10px 14px',
-                borderRadius: isOpen ? '10px 10px 0 0' : '10px',
-                background: isOpen ? '#F1F5F9' : '#F8FAFC',
-                border: '1px solid #F1F5F9',
-                cursor: 'pointer', transition: 'background .15s',
-              }}
-            >
+    <div>
+      {/* Mini summary bar */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+        {[
+          { label: 'Done',        count: doneCount,   color: '#01847C', bg: '#F0FDF9' },
+          { label: 'In Progress', count: inProgCount, color: '#E8A030', bg: '#FFFBEB' },
+          { label: 'Not Started', count: notStCount,  color: '#94A3B8', bg: '#F8FAFC' },
+        ].map(s => (
+          <div key={s.label} style={{
+            flex: 1, padding: '10px 12px', background: s.bg, borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '500' }}>{s.label}</span>
+            <span style={{ fontSize: '18px', fontWeight: '800', color: s.color }}>{s.count}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+        {activities.map((act, i) => {
+          const ss = statusStyle(act.status)
+          const isActive = act.status === 'In Progress'
+
+          return (
+            <div key={i} style={{
+              display: 'flex', gap: '12px', alignItems: 'flex-start',
+              padding: '12px 14px',
+              background: isActive ? '#FFFBEB' : '#F8FAFC',
+              borderRadius: '12px',
+              border: `1.5px solid ${isActive ? '#E8A03040' : '#F1F5F9'}`,
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {/* Left accent */}
               <div style={{
-                width: '26px', height: '26px', borderRadius: '7px',
-                background: '#01847C', color: '#fff', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '11px', fontWeight: '700',
+                position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+                background: ss.dot, borderRadius: '12px 0 0 12px',
+              }} />
+
+              {/* Time block */}
+              <div style={{
+                flexShrink: 0, textAlign: 'center',
+                background: '#fff', borderRadius: '8px', padding: '6px 8px',
+                border: '1px solid #E2E8F0', minWidth: '58px',
               }}>
-                {a.no}
+                <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', lineHeight: 1 }}>
+                  {fmtTime(act.planned_start)}
+                </div>
+                <div style={{ fontSize: '9px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>
+                  → {fmtTime(act.planned_end)}
+                </div>
               </div>
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{a.name}</span>
-              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '99px', background: ss.bg, color: ss.color, whiteSpace: 'nowrap' }}>
-                {ss.label}
-              </span>
-              <span style={{ fontSize: '12px', color: '#94A3B8', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s', width: '14px', textAlign: 'center' }}>›</span>
+
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  {act.stage && (
+                    <span style={{
+                      background: '#0F172A', color: '#fff', borderRadius: '4px',
+                      padding: '1px 6px', fontSize: '9px', fontWeight: '800',
+                    }}>{act.stage}</span>
+                  )}
+                  {act.event && (
+                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '500' }}>{act.event}</span>
+                  )}
+                </div>
+                <p style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, margin: 0 }}>
+                  {act.activity}
+                </p>
+                {act.area && (
+                  <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', margin: 0 }}>
+                    Area: {act.area}
+                  </p>
+                )}
+              </div>
+
+              {/* Status + progress */}
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                <StatusChip status={act.status} />
+                {act.progress > 0 && (
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: ss.color }}>
+                    {Math.round(act.progress * 100)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── OJK Activities ───────────────────────────────────────────────────────────
+const PHASE_COLOR = {
+  'Pre-Cutover':            { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Pre-Cutover (lanjutan)': { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
+  'Cutover':                { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
+  'Post-Cutover':           { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
+}
+const STATUS_STYLE = {
+  IN_PROGRESS: { bg: '#FEF9C3', color: '#854D0E', label: 'On Going'    },
+  NOT_STARTED: { bg: '#F1F5F9', color: '#64748B', label: 'Not Started' },
+  DONE:        { bg: '#DCFCE7', color: '#15803D', label: 'Done'        },
+}
+
+function OJKActivities({ activities = [] }) {
+  const [openStage, setOpenStage] = useState(null)
+  const [openDay,   setOpenDay]   = useState({})
+
+  const toggleStage = (no) => { setOpenStage(p => p === no ? null : no); setOpenDay({}) }
+  const toggleDay   = (no, di) => { const k = `${no}-${di}`; setOpenDay(p => ({ ...p, [k]: !p[k] })) }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {activities.map((stage) => {
+        const isOpen = openStage === stage.no
+        const ss = STATUS_STYLE[stage.status] || STATUS_STYLE.NOT_STARTED
+        const pc = PHASE_COLOR[stage.phase]   || PHASE_COLOR['Cutover']
+        return (
+          <div key={stage.no} style={{ borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+            <div onClick={() => toggleStage(stage.no)} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '12px 14px', cursor: 'pointer',
+              background: isOpen ? '#F8FAFC' : '#fff', transition: 'background .15s',
+            }}>
+              <div style={{ flexShrink: 0, borderRadius: '8px', padding: '4px 8px', background: '#0F172A', color: '#fff', fontSize: '10px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                {stage.stage}
+              </div>
+              <span style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>{stage.period}</span>
+              <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A', minWidth: 0 }}>{stage.title}</span>
+              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: pc.bg, color: pc.text, border: `1px solid ${pc.border}` }}>{stage.phase}</span>
+              <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: ss.bg, color: ss.color }}>{ss.label}</span>
+              <span style={{ fontSize: '13px', color: '#94A3B8', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
             </div>
             {isOpen && (
-              <div style={{ background: '#FAFAFA', border: '1px solid #F1F5F9', borderTop: 'none', borderRadius: '0 0 10px 10px', padding: '8px 14px 10px 50px' }}>
-                {a.details.map((d, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: i < a.details.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#CBD5E1', flexShrink: 0 }} />
-                    <span style={{ fontSize: '12px', color: '#64748B' }}>{d}</span>
-                  </div>
-                ))}
+              <div style={{ borderTop: '1px solid #F1F5F9', background: '#FAFAFA' }}>
+                {(stage.days || []).map((day, di) => {
+                  const dayKey = `${stage.no}-${di}`
+                  const isDayOpen = openDay[dayKey]
+                  return (
+                    <div key={di} style={{ borderBottom: di < stage.days.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                      <div onClick={() => toggleDay(stage.no, di)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px 10px 46px', cursor: 'pointer', background: isDayOpen ? '#F1F5F9' : 'transparent', transition: 'background .12s' }}>
+                        <div style={{ flexShrink: 0, fontSize: '11px', fontWeight: '600', color: '#475569', fontFamily: 'monospace', background: '#E2E8F0', borderRadius: '6px', padding: '2px 8px', whiteSpace: 'nowrap' }}>{day.date}</div>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#01847C', border: '2px solid #fff', boxShadow: '0 0 0 2px #01847C', flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: '12px', fontWeight: '600', color: '#334155' }}>{day.label}</span>
+                        <span style={{ fontSize: '11px', color: '#94A3B8', transform: isDayOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
+                      </div>
+                      {isDayOpen && (
+                        <div style={{ padding: '6px 14px 10px 80px', background: '#F8FAFC' }}>
+                          {(day.activities || []).map((act, ai) => (
+                            <div key={ai} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '5px 0', borderBottom: ai < day.activities.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#01847C', flexShrink: 0, marginTop: '5px' }} />
+                              <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>{act}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -118,53 +440,158 @@ function OJKActivities({ activities = [] }) {
   )
 }
 
-// ── Main Dashboard ────────────────────────────────────────────────────────
+// ─── Stage Progress (consume FDR data) ────────────────────────────────────────
+function FDRStageBar({ stage }) {
+  const cPct = stage.done_pct      || 0
+  const iPct = stage.in_progress_pct || 0
+  const nPct = stage.not_started_pct || 0
+  const progPct = stage.progress_pct || 0
+
+  const statusColor = cPct >= 100 ? '#01847C' : iPct > 0 ? '#E8A030' : '#94A3B8'
+  const statusLabel = cPct >= 100 ? 'Done' : iPct > 0 ? 'In Progress' : 'Not Started'
+  const statusBg    = cPct >= 100 ? '#DCFCE7' : iPct > 0 ? '#FEF9C3' : '#F1F5F9'
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: '14px', padding: '16px 20px',
+      border: `1.5px solid ${iPct > 0 && cPct < 100 ? '#E8A03040' : '#F1F5F9'}`,
+      boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ background: statusColor, color: '#fff', borderRadius: '8px', padding: '3px 10px', fontSize: '11px', fontWeight: '800' }}>
+            {stage.stage}
+          </div>
+          {iPct > 0 && cPct < 100 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#FEF9C3', color: '#92400E', borderRadius: '99px', padding: '2px 8px', fontSize: '10px', fontWeight: '700' }}>
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#E8A030', animation: 'blink 1.5s infinite' }} />
+              On Going
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ padding: '2px 10px', borderRadius: '99px', fontSize: '11px', fontWeight: '700', background: statusBg, color: statusColor }}>{statusLabel}</span>
+          <span style={{ fontSize: '20px', fontWeight: '800', color: statusColor }}>{progPct}%</span>
+        </div>
+      </div>
+
+      {/* Stacked bar */}
+      <div style={{ height: '8px', borderRadius: '99px', overflow: 'hidden', background: '#F1F5F9', display: 'flex' }}>
+        {cPct > 0 && <div style={{ width: `${cPct}%`, background: '#01847C' }} />}
+        {iPct > 0 && <div style={{ width: `${iPct}%`, background: '#E8A030' }} />}
+        {nPct > 0 && <div style={{ width: `${nPct}%`, background: '#E2E8F0' }} />}
+      </div>
+
+      {/* Sub stats */}
+      <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+        <span style={{ fontSize: '11px', color: '#01847C', fontWeight: '600' }}>✓ Done: {cPct}%</span>
+        <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ Progress: {iPct}%</span>
+        <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '500' }}>○ Not Started: {nPct}%</span>
+        <span style={{ fontSize: '11px', color: '#CBD5E1', marginLeft: 'auto' }}>{stage.total} aktivitas</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+function Skeleton() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#F0F4F8', padding: '32px' }}>
+      <div style={{ height: '64px', background: '#fff', borderRadius: '12px', marginBottom: '24px', opacity: .5 }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        {[1, 2, 3, 4].map(i => <div key={i} style={{ height: '140px', background: '#fff', borderRadius: '20px', opacity: .4 }} />)}
+      </div>
+      {[1, 2, 3].map(i => <div key={i} style={{ height: '80px', background: '#fff', borderRadius: '14px', marginBottom: '12px', opacity: .4 }} />)}
+    </div>
+  )
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function DashboardPage({ user, onLogout }) {
-  const [data,        setData]        = useState(null)
+  const [ojkData,     setOjkData]     = useState(null)
+  const [fdrData,     setFdrData]     = useState(null)
+  const [todayActs,   setTodayActs]   = useState([])
   const [loading,     setLoading]     = useState(true)
   const [lastRefresh, setLastRefresh] = useState(null)
-  const [activeStage, setActiveStage] = useState(null)
-  const [filterStage, setFilterStage] = useState(null)
   const [downloading, setDownloading] = useState(false)
+  const [filterStage, setFilterStage] = useState(null)
 
-  const load = useCallback(async () => {
+  // Load OJK-side data (Google Sheets / dummy)
+  const loadOJK = useCallback(async () => {
     try {
       const d = await fetchDashboard(filterStage)
-      setData(d)
-      setLastRefresh(new Date())
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
+      setOjkData(d)
+    } catch (e) { console.error('[OJK]', e) }
   }, [filterStage])
+
+  // Load FDR Excel data
+  const loadFDR = useCallback(async () => {
+    try {
+      const d = await fetchFDR()
+      setFdrData(d)
+      // Pull today activities from overall FDR response
+      if (d.today_activities) setTodayActs(d.today_activities)
+    } catch (e) {
+      console.error('[FDR]', e)
+      // Fallback: try dedicated today endpoint
+      try {
+        const t = await fetchFDRToday()
+        setTodayActs(t.activities || [])
+      } catch {}
+    }
+  }, [])
+
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadOJK(), loadFDR()])
+    setLastRefresh(new Date())
+    setLoading(false)
+  }, [loadOJK, loadFDR])
 
   useEffect(() => {
     setLoading(true)
-    load()
-    const t = setInterval(load, REFRESH_INTERVAL)
+    loadAll()
+    const t = setInterval(loadAll, REFRESH_INTERVAL)
     return () => clearInterval(t)
-  }, [load])
+  }, [loadAll])
 
   const handleDownload = async () => {
     setDownloading(true)
     try { await downloadPDF() } finally { setDownloading(false) }
   }
 
-  if (loading && !data) return <Skeleton />
+  if (loading && !ojkData && !fdrData) return <Skeleton />
 
-  const o      = data?.overall || {}
-  const stages = data?.stages || []
-  const detail = data?.detail_summary || []
-  const ops    = data?.operational_readiness || []
-  const daily  = data?.daily_execution || []
-  const cal    = data?.calendar || []
-  const acts   = data?.ojk_activities || []
+  // Merge: prefer FDR overall if available, else fall back to OJK overall
+  const fdrOverall  = fdrData?.overall   || {}
+  const ojkOverall  = ojkData?.overall   || {}
+  const o           = fdrOverall.total ? fdrOverall : ojkOverall
+
+  const fdrStages   = fdrData?.stages    || []
+  const ojkStages   = ojkData?.stages    || []
+
+  const detail      = ojkData?.detail_summary        || []
+  const ops         = ojkData?.operational_readiness || []
+  const acts        = ojkData?.ojk_activities        || []
+
+  const today       = new Date()
+  const todayLabel  = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  // Go-live from OJK calendar
+  const cal     = ojkData?.calendar || []
   const goLive  = cal.find(c => c.type === 'golive')
   const dGoLive = goLive ? daysUntil(goLive.date) : null
 
+  // Displayed stages: FDR stages if available else OJK
+  const displayStages = fdrStages.length > 0 ? fdrStages : ojkStages
+
+  // Filter stages if pill selected
+  const filteredStages = filterStage !== null
+    ? displayStages.filter((_, i) => i === filterStage)
+    : displayStages
+
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* ── TOP NAV ── */}
       <nav style={{
@@ -175,73 +602,46 @@ export default function DashboardPage({ user, onLogout }) {
         boxShadow: '0 1px 8px rgba(0,0,0,.06)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Logo tanpa import file gambar */}
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '10px',
-            background: '#01847C', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '13px',
-          }}>BSI</div>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#01847C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '13px' }}>BSI</div>
           <div>
             <div style={{ fontWeight: '700', fontSize: '15px', color: '#0F172A', lineHeight: 1.2 }}>NEOM Dashboard</div>
-            <div style={{ fontSize: '11px', color: '#64748B' }}>Core Banking Upgrade</div>
+            <div style={{ fontSize: '11px', color: '#64748B' }}>Core Banking Upgrade · OJK View</div>
           </div>
         </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* Live indicator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '8px', height: '8px', background: '#16A34A', borderRadius: '50%', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
             <span style={{ fontSize: '12px', color: '#16A34A', fontWeight: '600' }}>Live</span>
           </div>
-
           {lastRefresh && (
-            <span style={{ fontSize: '12px', color: '#94A3B8' }}>
-              Update: {lastRefresh.toLocaleTimeString('id-ID')}
-            </span>
+            <span style={{ fontSize: '12px', color: '#94A3B8' }}>Update: {lastRefresh.toLocaleTimeString('id-ID')}</span>
           )}
-
           <button onClick={handleDownload} disabled={downloading} style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '8px 16px', border: 'none', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', border: 'none', borderRadius: '10px',
             background: '#E8A030', color: '#fff', fontWeight: '600', fontSize: '13px',
-            cursor: downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-            opacity: downloading ? .7 : 1,
+            cursor: downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: downloading ? .7 : 1,
           }}>
             {downloading ? '⏳' : '⬇️'} Download PDF
           </button>
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px',
-            border: '1px solid #E2E8F0',
-          }}>
-            <div style={{
-              width: '28px', height: '28px', borderRadius: '8px',
-              background: '#01847C', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '11px',
-            }}>
-              {user?.name?.[0] || 'U'}
+          {user && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px', border: '1px solid #E2E8F0' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#01847C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '11px' }}>{user?.name?.[0] || 'U'}</div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#0F172A', lineHeight: 1.2 }}>{user?.name}</div>
+                <div style={{ fontSize: '11px', color: '#64748B' }}>{user?.institution}</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#0F172A', lineHeight: 1.2 }}>{user?.name}</div>
-              <div style={{ fontSize: '11px', color: '#64748B' }}>{user?.institution}</div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => { sessionStorage.removeItem('neom_token'); onLogout() }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '8px 16px', border: '1.5px solid #FCA5A5', borderRadius: '10px',
-              background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '13px',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
+          )}
+          <button onClick={() => { sessionStorage.removeItem('neom_token'); onLogout() }} style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', border: '1.5px solid #FCA5A5', borderRadius: '10px',
+            background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+          }}
             onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.color = '#fff' }}
             onMouseLeave={e => { e.currentTarget.style.background = '#FFF1F1'; e.currentTarget.style.color = '#DC2626' }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
             Keluar
           </button>
@@ -249,55 +649,61 @@ export default function DashboardPage({ user, onLogout }) {
       </nav>
 
       {/* ── HEADER BANNER ── */}
-      <div style={{
-        background: 'linear-gradient(135deg, #01847C 0%, #016860 50%, #0F172A 100%)',
-        padding: '28px 32px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ position: 'absolute', inset: 0, opacity: .05,
-          backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)',
-          backgroundSize: '32px 32px' }} />
-
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <span style={{ background: 'rgba(232,160,48,.2)', color: '#E8A030', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '700', border: '1px solid rgba(232,160,48,.3)' }}>
-                  CONFIDENTIAL
-                </span>
-                <span style={{ background: 'rgba(255,255,255,.1)', color: 'rgba(255,255,255,.7)', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '600' }}>
-                  {data?.location}
-                </span>
-              </div>
-              <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>
-                {data?.project_name}
-              </h1>
-              <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '13px', marginTop: '6px' }}>
-                Laporan Progress untuk Otoritas Jasa Keuangan (OJK)
-              </p>
+      <div style={{ background: 'linear-gradient(135deg, #01847C 0%, #016860 50%, #0F172A 100%)', padding: '28px 32px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, opacity: .05, backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+        <div style={{ position: 'absolute', right: '-60px', top: '-60px', width: '260px', height: '260px', borderRadius: '50%', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.05)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <span style={{ background: 'rgba(232,160,48,.2)', color: '#E8A030', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '700', border: '1px solid rgba(232,160,48,.3)' }}>CONFIDENTIAL</span>
+              <span style={{ background: 'rgba(255,255,255,.1)', color: 'rgba(255,255,255,.7)', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '600' }}>
+                {ojkData?.location || 'Jakarta, Indonesia'}
+              </span>
             </div>
+            <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>
+              {ojkData?.project_name || 'NEOM Core Banking Upgrade'}
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '13px', marginTop: '6px' }}>
+              Laporan Progress untuk Otoritas Jasa Keuangan (OJK)
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+            {/* Last update */}
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '11px', fontWeight: '600', marginBottom: '4px' }}>LATEST UPDATE</div>
-              <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: '500' }}>
-                {data?.last_update ? new Date(data.last_update).toLocaleString('id-ID') : '—'}
+              <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '12px' }}>
+                {fdrData?.last_update
+                  ? new Date(fdrData.last_update).toLocaleString('id-ID')
+                  : ojkData?.last_update
+                  ? new Date(ojkData.last_update).toLocaleString('id-ID')
+                  : '—'}
               </div>
-              {dGoLive !== null && (
-                <div style={{
-                  marginTop: '8px', display: 'inline-block',
-                  background: 'rgba(220,38,38,.15)', color: '#FCA5A5',
-                  padding: '4px 12px', borderRadius: '99px',
-                  fontSize: '12px', fontWeight: '700',
-                  border: '1px solid rgba(220,38,38,.3)',
-                }}>
-                  Go-Live D-{Math.abs(dGoLive)}
+              <div style={{ marginTop: '4px', fontSize: '10px', color: 'rgba(255,255,255,.4)' }}>
+                {fdrData ? '📊 Sumber: Excel FDR' : '📡 Sumber: Google Sheets'}
+              </div>
+            </div>
+            {/* Go-Live countdown */}
+            {dGoLive !== null && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '11px', fontWeight: '600', marginBottom: '4px' }}>GO-LIVE</div>
+                <div style={{ background: 'rgba(220,38,38,.2)', color: '#FCA5A5', padding: '6px 16px', borderRadius: '99px', fontSize: '14px', fontWeight: '800', border: '1px solid rgba(220,38,38,.3)' }}>
+                  D-{Math.abs(dGoLive)}
                 </div>
-              )}
+              </div>
+            )}
+            {/* Overall progress */}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: 'rgba(255,255,255,.5)', fontSize: '11px', fontWeight: '600', marginBottom: '4px' }}>OVERALL PROGRESS</div>
+              <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '32px', fontWeight: '800', lineHeight: 1 }}>
+                {(o.progress_pct ?? o.completed_pct ?? 0).toFixed(1)}%
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── MAIN BODY ── */}
-      <main id="dashboard-main" style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+      <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
         {/* Stage filter pills */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -315,20 +721,21 @@ export default function DashboardPage({ user, onLogout }) {
           ))}
         </div>
 
-        {/* ── ROW 1: Donut + KPI ── */}
+        {/* ── ROW 1: KPI Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-          <div style={{
-            background: '#fff', borderRadius: '20px', padding: '28px',
-            boxShadow: '0 1px 8px rgba(0,0,0,.06)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', minWidth: '240px',
-          }}>
-            <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A', alignSelf: 'flex-start' }}>Upgrade Progress</div>
-            <DonutChart completed={o.completed_pct || 0} inProgress={o.in_progress_pct || 0} notStarted={o.not_started_pct || 0} />
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Donut */}
+          <div style={{ background: '#fff', borderRadius: '20px', padding: '28px 24px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '210px' }}>
+            <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A', alignSelf: 'flex-start', marginBottom: '14px' }}>Upgrade Progress</div>
+            <DonutChart
+              completed={o.done_pct || o.completed_pct || 0}
+              inProgress={o.in_progress_pct || 0}
+              notStarted={o.not_started_pct || 0}
+            />
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '14px' }}>
               {[
-                { label: 'Completed',   pct: o.completed_pct,   color: '#01847C' },
-                { label: 'In Progress', pct: o.in_progress_pct, color: '#E8A030' },
-                { label: 'Not Started', pct: o.not_started_pct, color: '#E2E8F0' },
+                { label: 'Completed',   pct: o.done_pct || o.completed_pct || 0, color: '#01847C' },
+                { label: 'In Progress', pct: o.in_progress_pct || 0,              color: '#E8A030' },
+                { label: 'Not Started', pct: o.not_started_pct || 0,              color: '#CBD5E1' },
               ].map(s => (
                 <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -341,15 +748,13 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
           </div>
 
+          {/* 3 KPI cards */}
           {[
-            { label: 'Total Tasks', value: (o.total_tasks || 0).toLocaleString(), icon: '📋', sub: `${o.completed_count || 0} selesai`, color: '#01847C' },
-            { label: 'Completed',   value: `${(o.completed_pct || 0).toFixed(1)}%`, icon: '✅', sub: `${o.completed_count || 0} tasks`, color: '#16A34A' },
-            { label: 'In Progress', value: `${(o.in_progress_pct || 0).toFixed(1)}%`, icon: '⚙️', sub: `${o.in_progress_count || 0} tasks`, color: '#E8A030' },
-          ].map((k, i) => (
-            <div key={k.label} style={{
-              background: '#fff', borderRadius: '20px', padding: '28px',
-              boxShadow: '0 1px 8px rgba(0,0,0,.06)', position: 'relative', overflow: 'hidden',
-            }}>
+            { label: 'Total Tasks',  value: (o.total || o.total_tasks || 0).toLocaleString(), sub: `${o.done || o.completed_count || 0} selesai`, color: '#01847C', icon: '📋' },
+            { label: 'Completed',    value: `${(o.done_pct || o.completed_pct || 0).toFixed(1)}%`, sub: `${o.done || o.completed_count || 0} tasks`, color: '#16A34A', icon: '✅' },
+            { label: 'In Progress',  value: `${(o.in_progress_pct || 0).toFixed(1)}%`, sub: `${o.in_progress || o.in_progress_count || 0} tasks`, color: '#E8A030', icon: '⚙️' },
+          ].map(k => (
+            <div key={k.label} style={{ background: '#fff', borderRadius: '20px', padding: '28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: k.color }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
@@ -362,16 +767,23 @@ export default function DashboardPage({ user, onLogout }) {
                 </div>
               </div>
               <div style={{ marginTop: '20px' }}>
-                <ProgressBar value={parseFloat(k.value) || (k.label === 'Total Tasks' ? 100 : 0)} color={k.color} />
+                <ProgressBar value={parseFloat(k.value) || 0} color={k.color} />
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── ROW 2: Stage Progress ── */}
+        {/* ── ROW 2: Stage Progress (dari FDR Excel) ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Stage Progress</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Stage Progress</h2>
+              {fdrData && (
+                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                  Data real-time dari Excel FDR · diperbarui otomatis saat file berubah
+                </p>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
               {[{ color: '#01847C', label: 'Completed' }, { color: '#E8A030', label: 'In Progress' }, { color: '#E2E8F0', label: 'Not Started' }].map(l => (
                 <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#64748B' }}>
@@ -382,72 +794,109 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {stages.map(s => (
-              <StageBar key={s.id} stage={s} active={activeStage?.id === s.id}
-                onClick={st => setActiveStage(activeStage?.id === st.id ? null : st)} />
-            ))}
+            {filteredStages.length > 0
+              ? filteredStages.map((s, i) => <FDRStageBar key={i} stage={s} />)
+              : ojkStages.map(s => (
+                  <StageBar key={s.id} stage={s} />
+                ))
+            }
           </div>
         </div>
 
-        {/* ── ROW 3 BARU: Timeline + OJK Activities ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px', marginBottom: '24px' }}>
+        {/* ── ROW 3: Gantt Timeline + Today Activities ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px', marginBottom: '24px' }}>
+
+          {/* Gantt */}
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Timeline NEOM</h2>
-              <span style={{ fontSize: '11px', color: '#94A3B8' }}>Mar–Mei 2026</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Timeline NEOM 2026</h2>
+                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Jan – Jun 2026 · Garis merah = Hari ini</p>
+              </div>
+              <span style={{ background: '#F1F5F9', borderRadius: '8px', padding: '4px 12px', fontSize: '11px', color: '#64748B', fontWeight: '600', fontFamily: 'monospace' }}>
+                {today.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
             </div>
-            <CalendarTimeline calendar={cal} />
+            <GanttTimeline />
           </div>
 
+          {/* Today Activities */}
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>9 Aktivitas Utama FDR Update Core Banking NEOM</h2>
-              <span style={{ fontSize: '11px', color: '#94A3B8' }}>klik untuk detail teknis</span>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas Hari Ini</h2>
+                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>{todayLabel}</p>
+              </div>
+              {todayActs.length > 0 && (
+                <span style={{ background: '#01847C', color: '#fff', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: '700' }}>
+                  {todayActs.length} aktivitas
+                </span>
+              )}
+            </div>
+            <TodayActivities activities={todayActs} />
+          </div>
+        </div>
+
+        {/* ── ROW 4: OJK Activities + Detail Summary ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', marginBottom: '24px' }}>
+          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas per Stage — OJK View</h2>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {[{ bg: '#EFF6FF', text: '#1D4ED8', label: 'Pre-Cutover' }, { bg: '#FFF7ED', text: '#C2410C', label: 'Cutover' }, { bg: '#F0FDF4', text: '#15803D', label: 'Post' }].map(p => (
+                  <span key={p.label} style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '99px', background: p.bg, color: p.text }}>{p.label}</span>
+                ))}
+              </div>
             </div>
             <OJKActivities activities={acts} />
           </div>
-        </div>
 
-        {/* ── ROW 4: Detail Summary + Operational Readiness ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+          {/* Detail Summary */}
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
             <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A', marginBottom: '16px' }}>Detail Summary</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #F1F5F9' }}>
-                  {['Area', 'Status', 'Progress', 'Notes'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '8px 4px', fontSize: '11px', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {detail.map((d, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #F8FAFC' }}>
-                    <td style={{ padding: '10px 4px', fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{d.area}</td>
-                    <td style={{ padding: '10px 4px' }}><RAGBadge status={d.status} /></td>
-                    <td style={{ padding: '10px 4px', width: '100px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ flex: 1 }}>
-                          <ProgressBar value={d.progress} color={d.status === 'GREEN' ? '#16A34A' : d.status === 'RED' ? '#DC2626' : '#D97706'} height={6} />
-                        </div>
-                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748B', whiteSpace: 'nowrap' }}>{d.progress}%</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px 4px', fontSize: '12px', color: '#64748B' }}>{d.notes || '—'}</td>
+            {detail.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #F1F5F9' }}>
+                    {['Area', 'Status', 'Progress', 'Notes'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '8px 4px', fontSize: '11px', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {detail.map((d, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #F8FAFC' }}>
+                      <td style={{ padding: '10px 4px', fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{d.area}</td>
+                      <td style={{ padding: '10px 4px' }}><RAGBadge status={d.status} /></td>
+                      <td style={{ padding: '10px 4px', width: '90px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <div style={{ flex: 1 }}>
+                            <ProgressBar value={d.progress} color={d.status === 'GREEN' ? '#16A34A' : d.status === 'RED' ? '#DC2626' : '#D97706'} height={5} />
+                          </div>
+                          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748B' }}>{d.progress}%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 4px', fontSize: '12px', color: '#64748B' }}>{d.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📊</div>
+                <p style={{ fontSize: '13px', fontWeight: '600' }}>Data belum tersedia</p>
+              </div>
+            )}
           </div>
+        </div>
 
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
+        {/* ── ROW 5: Operational Readiness ── */}
+        {ops.length > 0 && (
+          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A', marginBottom: '16px' }}>Operational Readiness</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
               {ops.map((op, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '14px 16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #F1F5F9',
-                }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
                   <div>
                     <div style={{ fontWeight: '600', fontSize: '14px', color: '#0F172A' }}>{op.area}</div>
                     {op.notes && <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>{op.notes}</div>}
@@ -457,63 +906,25 @@ export default function DashboardPage({ user, onLogout }) {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* ── ROW 5: Daily Execution ── */}
-        <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Daily Execution Plan — Core Banking Upgrade</h2>
-            <span style={{ background: '#01847C', color: '#fff', borderRadius: '99px', padding: '2px 10px', fontSize: '11px', fontWeight: '700' }}>
-              {daily.filter(d => d.status === 'DONE').length}/{daily.length} Done
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {daily.map((task, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: '14px',
-                padding: '12px 16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #F1F5F9',
-              }}>
-                <span style={{
-                  width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
-                  background: task.status === 'DONE' ? '#DCFCE7' : task.status === 'IN_PROGRESS' ? '#FEF3C7' : '#F1F5F9',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '13px', fontWeight: '800', color: '#64748B',
-                }}>
-                  {task.status === 'DONE' ? '✓' : task.no}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#0F172A', textDecoration: task.status === 'DONE' ? 'line-through' : 'none' }}>
-                    {task.task}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>PIC: {task.pic}</div>
-                </div>
-                <RAGBadge status={task.status} />
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
       </main>
 
       <footer style={{ padding: '16px 32px', borderTop: '1px solid #E2E8F0', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '12px', color: '#94A3B8' }}>© 2026 Bank Syariah Indonesia · Dokumen Rahasia</span>
-        <span style={{ fontSize: '12px', color: '#94A3B8' }}>Data diperbarui setiap 60 detik</span>
+        <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+          Data diperbarui setiap {REFRESH_INTERVAL / 1000}s
+          {fdrData && <> · <span style={{ color: '#01847C', fontWeight: '600' }}>📊 FDR Excel aktif</span></>}
+        </span>
       </footer>
 
-      <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
-    </div>
-  )
-}
-
-function Skeleton() {
-  return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', padding: '32px' }}>
-      <div style={{ height: '64px', background: '#fff', borderRadius: '12px', marginBottom: '24px', opacity: .5 }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{ height: '160px', background: '#fff', borderRadius: '20px', opacity: .5 }} />
-        ))}
-      </div>
+      <style>{`
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+      `}</style>
     </div>
   )
 }

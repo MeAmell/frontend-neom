@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { fetchBranchTesting } from '../utils/api'
 
 const REFRESH_INTERVAL = 60_000
@@ -458,6 +458,83 @@ function ChannelTabs({ active, onChange, exaData, t24Data }) {
   )
 }
 
+// ── Upload Branch Testing Panel ───────────────────────────────────────────────
+function UploadBTPanel({ onSuccess }) {
+  const [uploading, setUploading] = useState(false)
+  const [status,    setStatus]    = useState(null)
+  const fileRef = React.useRef()
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      setStatus({ type: 'err', msg: 'File harus berformat .xlsx' })
+      return
+    }
+    setUploading(true)
+    setStatus(null)
+    try {
+      const token = sessionStorage.getItem('neom_token')
+      const form  = new FormData()
+      form.append('file', file)
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/upload/branch-testing-excel`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Upload gagal')
+      setStatus({ type: 'ok', msg: `✅ ${data.message} · ${data.total_rows} baris data` })
+      onSuccess?.()
+    } catch (err) {
+      setStatus({ type: 'err', msg: `❌ ${err.message}` })
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: '16px', padding: '16px 20px',
+      border: '1.5px dashed rgba(1,132,124,.4)',
+      boxShadow: '0 1px 6px rgba(0,0,0,.05)',
+      display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+      marginBottom: '20px',
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0F172A', marginBottom: '2px' }}>
+          Upload Hasil Branch Testing
+        </div>
+        <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+          Upload file <code style={{ background:'#F1F5F9', padding:'1px 4px', borderRadius:'4px' }}>branch-testing.xlsx</code> export dari Forms/SharePoint
+        </div>
+        {status && (
+          <div style={{
+            marginTop: '8px', fontSize: '12px', fontWeight: '600',
+            color: status.type === 'ok' ? '#16A34A' : '#DC2626',
+            background: status.type === 'ok' ? '#F0FDF4' : '#FEF2F2',
+            padding: '6px 10px', borderRadius: '8px',
+          }}>
+            {status.msg}
+          </div>
+        )}
+      </div>
+      <label style={{
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        padding: '9px 18px', borderRadius: '10px', cursor: uploading ? 'not-allowed' : 'pointer',
+        background: uploading ? '#94A3B8' : '#01847C',
+        color: '#fff', fontSize: '13px', fontWeight: '700',
+        boxShadow: uploading ? 'none' : '0 2px 8px rgba(1,132,124,.35)',
+        whiteSpace: 'nowrap',
+      }}>
+        {uploading ? '⏳ Mengupload...' : '📂 Pilih File'}
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleUpload}
+          disabled={uploading} style={{ display: 'none' }} />
+      </label>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BranchTestingPage({ user, onLogout, hideSidebar }) {
   const [data,        setData]        = useState(null)
@@ -589,6 +666,9 @@ export default function BranchTestingPage({ user, onLogout, hideSidebar }) {
 
       {/* ── MAIN ── */}
       <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+
+        {/* Upload panel — admin only */}
+        <UploadBTPanel onSuccess={load} />
 
         {/* Summary cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '24px' }}>

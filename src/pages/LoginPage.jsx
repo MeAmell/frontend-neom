@@ -103,13 +103,6 @@ export default function LoginPage({ onLogin }) {
             </button>
           </form>
 
-          <div style={{ marginTop: '28px', padding: '16px', background: '#F0FDF4', borderRadius: '12px', border: '1px solid #BBF7D0' }}>
-            <p style={{ fontSize: '12px', color: '#166534', fontWeight: '600', marginBottom: '6px' }}>🔐 Demo Credentials</p>
-            <p style={{ fontSize: '12px', color: '#16A34A', fontFamily: 'DM Mono, monospace' }}>OJK: ojk_viewer / OJK@2026!</p>
-            <p style={{ fontSize: '12px', color: '#16A34A', fontFamily: 'DM Mono, monospace' }}>Admin: bsi_admin / BSI@Admin2026!</p>
-            <p style={{ fontSize: '12px', color: '#16A34A', fontFamily: 'DM Mono, monospace' }}>Branch: branch_team / Branch@2026!</p>
-          </div>
-
           <p style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: '#94A3B8' }}>© 2026 Bank Syariah Indonesia · Confidential</p>
         </div>
       </div>

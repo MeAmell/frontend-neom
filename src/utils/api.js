@@ -91,3 +91,26 @@ export async function reloadFDR() {
   const res = await req('/api/fdr-progress/reload', { method: 'POST' })
   return res.json()
 }
+export async function fetchTodayActivities() {
+  const res = await req('/api/today-activities')
+  return res.json()
+}
+// ── Upload helpers ────────────────────────────────────────────────────────────
+async function uploadFile(endpoint, file) {
+  const t = token()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}${endpoint}`, {
+    method: 'POST',
+    headers: t ? { Authorization: `Bearer ${t}` } : {},
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Upload failed')
+  }
+  return res.json()
+}
+
+export async function uploadFDRExcel(file)    { return uploadFile('/api/upload/fdr-excel', file) }
+export async function uploadBTExcel(file)     { return uploadFile('/api/upload/branch-testing-excel', file) }

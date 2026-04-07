@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { RAGBadge, ProgressBar } from '../components/RAGBadge'
-import { fetchFDRProgress } from '../utils/api'
+import { fetchFDRProgress, reloadFDR } from '../utils/api'
 
 const REFRESH_INTERVAL = 60_000
 
@@ -748,6 +748,143 @@ function DetailAktivitas({ items = [] }) {
   )
 }
 
+// ── Aktivitas Hari Ini (FDR) ─────────────────────────────────────────────────
+function TodayActivitiesFDR({ activities = [] }) {
+  if (activities.length === 0) return (
+    <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8' }}>
+      <div style={{ fontSize: '28px', marginBottom: '8px' }}>✅</div>
+      <p style={{ fontSize: '13px', fontWeight: '500' }}>Tidak ada aktivitas yang dijadwalkan hari ini</p>
+    </div>
+  )
+  const statusMap = {
+    'Done':        { bg: '#F0FDF4', color: '#16A34A', dot: '#16A34A' },
+    'In Progress': { bg: '#FFFBEB', color: '#D97706', dot: '#E8A030' },
+    'Not Started': { bg: '#F8FAFC', color: '#64748B', dot: '#CBD5E1' },
+  }
+  const stageColors = {
+    'Stage 0': '#6366F1', 'Stage 1': '#0EA5E9', 'Stage 2': '#01847C',
+    'Stage 3': '#8B5CF6', 'Stage 4': '#E8A030', 'Stage 5': '#94A3B8',
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '10px' }}>
+      {activities.map((a, i) => {
+        const sc = statusMap[a.status] || statusMap['Not Started']
+        const stageColor = stageColors[a.stage] || '#64748B'
+        const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—'
+        return (
+          <div key={i} style={{
+            background: '#fff', borderRadius: '14px',
+            border: `1.5px solid ${a.status === 'In Progress' ? '#E8A030' : '#F1F5F9'}`,
+            padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start',
+            boxShadow: a.status === 'In Progress' ? '0 4px 16px rgba(232,160,48,.12)' : '0 1px 4px rgba(0,0,0,.04)',
+          }}>
+            {/* Left: time */}
+            <div style={{ minWidth: '52px', textAlign: 'center', flexShrink: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', fontFamily: 'monospace', lineHeight: 1.2 }}>{fmtTime(a.planned_start)}</div>
+              <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '1px' }}>–{fmtTime(a.planned_end)}</div>
+            </div>
+            {/* Center */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                <span style={{ background: stageColor, color: '#fff', borderRadius: '5px', padding: '1px 7px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{a.stage}</span>
+                <span style={{ fontSize: '10px', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.event}</span>
+              </div>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, marginBottom: '3px' }}>{a.activity}</div>
+              {a.area && <div style={{ fontSize: '11px', color: '#94A3B8' }}>Area: {a.area}</div>}
+            </div>
+            {/* Right: status + progress */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: sc.bg, color: sc.color, borderRadius: '99px', padding: '2px 8px', fontSize: '10px', fontWeight: '700' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: sc.dot }} />
+                {a.status}
+              </span>
+              <span style={{ fontSize: '10px', color: a.progress === 1 ? '#16A34A' : '#94A3B8', fontWeight: '700' }}>
+                {a.progress === 1 ? '✓ Done' : '○ Pending'}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Upload Panel (Admin only) ─────────────────────────────────────────────────
+function UploadFDRPanel({ onSuccess }) {
+  const [uploading, setUploading] = useState(false)
+  const [status,    setStatus]    = useState(null)   // {type:'ok'|'err', msg}
+  const fileRef = React.useRef()
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      setStatus({ type: 'err', msg: 'File harus berformat .xlsx' })
+      return
+    }
+    setUploading(true)
+    setStatus(null)
+    try {
+      const token = sessionStorage.getItem('neom_token')
+      const form  = new FormData()
+      form.append('file', file)
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/upload/fdr-excel`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Upload gagal')
+      setStatus({ type: 'ok', msg: `✅ ${data.message} · ${data.total_rows} baris terbaca` })
+      onSuccess?.()
+    } catch (err) {
+      setStatus({ type: 'err', msg: `❌ ${err.message}` })
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: '16px', padding: '18px 22px',
+      border: '1.5px dashed #01847C55',
+      boxShadow: '0 1px 6px rgba(0,0,0,.05)',
+      display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0F172A', marginBottom: '2px' }}>
+          Upload FDR Excel
+        </div>
+        <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+          Upload file <code style={{ background:'#F1F5F9', padding:'1px 4px', borderRadius:'4px' }}>fdr-all-progress.xlsx</code> yang didownload dari SharePoint
+        </div>
+        {status && (
+          <div style={{
+            marginTop: '8px', fontSize: '12px', fontWeight: '600',
+            color: status.type === 'ok' ? '#16A34A' : '#DC2626',
+            background: status.type === 'ok' ? '#F0FDF4' : '#FEF2F2',
+            padding: '6px 10px', borderRadius: '8px',
+          }}>
+            {status.msg}
+          </div>
+        )}
+      </div>
+      <label style={{
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        padding: '9px 18px', borderRadius: '10px', cursor: uploading ? 'not-allowed' : 'pointer',
+        background: uploading ? '#94A3B8' : '#01847C',
+        color: '#fff', fontSize: '13px', fontWeight: '700',
+        boxShadow: uploading ? 'none' : '0 2px 8px rgba(1,132,124,.35)',
+        transition: 'all .2s', whiteSpace: 'nowrap',
+      }}>
+        {uploading ? '⏳ Mengupload...' : '📂 Pilih File'}
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleUpload}
+          disabled={uploading} style={{ display: 'none' }} />
+      </label>
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function FDRMasterPage({ user, onLogout }) {
   const [lastRefresh, setLastRefresh] = useState(new Date())
@@ -775,10 +912,11 @@ export default function FDRMasterPage({ user, onLogout }) {
   }, [loadData])
 
   // ── Derive display values from API data ──────────────────────────────────
-  const items       = fdrData?.items      || []
-  const overall     = fdrData?.overall    || {}
-  const stages      = fdrData?.stages     || []
-  const timelines   = fdrData?.timelines  || []
+  const items          = fdrData?.items             || []
+  const overall        = fdrData?.overall           || {}
+  const stages         = fdrData?.stages            || []
+  const timelines      = fdrData?.timelines         || []
+  const todayActivities = fdrData?.today_activities || []
 
   const completedActs   = overall.done        || 0
   const inProgressActs  = overall.in_progress || 0
@@ -789,7 +927,7 @@ export default function FDRMasterPage({ user, onLogout }) {
   const notStartedPct   = overall.not_started_pct || 0
 
   // META derived from API
-  const overallPct = completedPct
+  const overallPct = overall.progress_pct ?? completedPct
   const overallStatus = completedPct === 100 ? 'SELESAI' : inProgressPct > 0 ? 'ON PROGRESS' : 'BELUM MULAI'
 
   if (loading && !fdrData) return (
@@ -931,6 +1069,11 @@ export default function FDRMasterPage({ user, onLogout }) {
       {/* ── MAIN BODY ── */}
       <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
+        {/* ── UPLOAD PANEL — admin only, hidden from OJK view ── */}
+        <div style={{ marginBottom: '20px' }}>
+          <UploadFDRPanel onSuccess={loadData} />
+        </div>
+
         {/* ── ROW 1: Donut card + 3 Summary Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
 
@@ -1011,6 +1154,23 @@ export default function FDRMasterPage({ user, onLogout }) {
           ))}
         </div>
 
+        {/* ── TODAY ACTIVITIES ── */}
+        <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', border: '2px solid rgba(1,132,124,.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#01847C', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas Hari Ini</h2>
+              <span style={{ background: todayActivities.length > 0 ? '#01847C' : '#94A3B8', color: '#fff', borderRadius: '99px', padding: '2px 10px', fontSize: '11px', fontWeight: '700' }}>
+                {todayActivities.length} aktivitas
+              </span>
+            </div>
+            <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+              {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+          <TodayActivitiesFDR activities={todayActivities} />
+        </div>
+
         {/* ── ROW 3: Progress per Stage — Vertical stacked bar list ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -1034,11 +1194,11 @@ export default function FDRMasterPage({ user, onLogout }) {
             ) : error ? (
               <div style={{ padding: '20px', color: '#DC2626', fontSize: '13px' }}>⚠ {error}</div>
             ) : stages.map((s, i) => {
-              const cPct = s.done_pct        || 0
+              const cPct = s.progress_pct    || s.done_pct        || 0  // Progress column
               const iPct = s.in_progress_pct || 0
-              const nPct = s.not_started_pct || 0
-              const statusRaw = s.done === s.total && s.total > 0 ? 'DONE'
-                : s.in_progress > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
+              const nPct = Math.max(0, 100 - cPct - iPct)
+              const statusRaw = cPct >= 100 ? 'DONE'
+                : cPct > 0 || s.in_progress > 0 ? 'IN_PROGRESS' : 'NOT_STARTED'
               const statusColor =
                 statusRaw === 'DONE'        ? '#01847C' :
                 statusRaw === 'IN_PROGRESS' ? '#E8A030' : '#94A3B8'
@@ -1087,7 +1247,7 @@ export default function FDRMasterPage({ user, onLogout }) {
                       {statusLabel}
                     </span>
                     <span style={{ fontSize: '20px', fontWeight: '800', color: statusColor, minWidth: '60px', textAlign: 'right' }}>
-                      {cPct.toFixed(cPct % 1 === 0 ? 0 : 1)}%
+                      {(s.progress_pct || cPct).toFixed(1)}%
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '20px', paddingLeft: '174px' }}>
