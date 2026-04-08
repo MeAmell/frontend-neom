@@ -912,11 +912,38 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
   }, [loadData])
 
   // ── Derive display values from API data ──────────────────────────────────
-  const items          = fdrData?.items             || []
-  const overall        = fdrData?.overall           || {}
-  const stages         = fdrData?.stages            || []
-  const timelines      = fdrData?.timelines         || []
-  const todayActivities = fdrData?.today_activities || []
+  const items          = fdrData?.items    || []
+  const overall        = fdrData?.overall  || {}
+  const stages         = fdrData?.stages   || []
+  const timelines      = fdrData?.timelines || []
+
+  // ── Today Activities: derived dynamically from items based on today's date ──
+  const todayActivities = React.useMemo(() => {
+    const todayStr = new Date().toDateString()
+    return items
+      .filter(r => {
+        const ps = r['Planned Start Time']
+        if (!ps) return false
+        return new Date(ps).toDateString() === todayStr
+      })
+      .map(r => ({
+        stage:         r.Stage        || '',
+        activity:      r.Activity     || '',
+        status:        r.Status       || 'Not Started',
+        planned_start: r['Planned Start Time'] || null,
+        planned_end:   r['Planned End Time']   || null,
+        actual_start:  r['Actual Start Time']  || null,
+        actual_end:    r['Actual End Time']    || null,
+        event:         r.Event        || '',
+        area:          r.Area         || '',
+        progress:      (r.Status || '').toLowerCase().includes('done') ? 1 : 0,
+      }))
+      .sort((a, b) => {
+        const ta = a.planned_start ? new Date(a.planned_start) : 0
+        const tb = b.planned_start ? new Date(b.planned_start) : 0
+        return ta - tb
+      })
+  }, [items])
 
   const completedActs   = overall.done        || 0
   const inProgressActs  = overall.in_progress || 0

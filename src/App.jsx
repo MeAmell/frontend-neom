@@ -39,7 +39,7 @@ export default function App() {
       <FDRMasterPage
         user={user}
         onLogout={logout}
-        readOnly   // hides all upload buttons inside FDRMasterPage
+        readOnly={true}
       />
     )
   }
