@@ -1067,7 +1067,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
                 CONFIDENTIAL
               </span>
               <span style={{ background: 'rgba(255,255,255,.1)', color: 'rgba(255,255,255,.7)', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '600' }}>
-                FDR 2 — 5-7 March 2026
+                FDR 3 April 2026
               </span>
             </div>
             <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>
