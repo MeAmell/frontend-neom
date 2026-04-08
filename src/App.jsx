@@ -23,18 +23,33 @@ export default function App() {
 
   const role = user.role
 
+  // ── OJK viewer: dashboard only ─────────────────────────────────────────────
   if (role === 'viewer') {
     return <DashboardPage user={user} onLogout={logout} />
   }
 
+  // ── Branch tester: branch testing only ────────────────────────────────────
   if (role === 'branch') {
     return <BranchTestingPage user={user} onLogout={logout} />
   }
 
+  // ── Presenter / Direksi: FDR Master read-only, no upload ──────────────────
+  if (role === 'presenter') {
+    return (
+      <FDRMasterPage
+        user={user}
+        onLogout={logout}
+        readOnly   // hides all upload buttons inside FDRMasterPage
+      />
+    )
+  }
+
+  // ── Admin: full sidebar with all pages ────────────────────────────────────
   if (role === 'admin') {
     return (
       <div style={{ display: 'flex', minHeight: '100vh' }}>
-        {/* Sidebar — putih */}
+
+        {/* ── Sidebar ── */}
         <aside style={{
           width: '200px',
           background: '#fff',
@@ -62,9 +77,9 @@ export default function App() {
           {/* Nav items */}
           <nav style={{ flex: 1, padding: '12px 10px' }}>
             {[
-              { key: 'ojk',    label: 'OJK Dashboard',      desc: 'Progress upgrade'   },
-              { key: 'branch', label: 'Branch Testing',      desc: 'EXA & T24 Browser'  },
-              { key: 'fdr',    label: 'Dashboard Master FDR', desc: 'FDR Overview & Activities' },
+              { key: 'ojk',    label: 'OJK Dashboard',       desc: 'Progress upgrade'             },
+              { key: 'branch', label: 'Branch Testing',       desc: 'EXA & T24 Browser'            },
+              { key: 'fdr',    label: 'Dashboard Master FDR', desc: 'FDR Overview & Activities'    },
             ].map(item => (
               <button
                 key={item.key}
@@ -79,20 +94,18 @@ export default function App() {
                 onMouseEnter={e => { if (activePage !== item.key) e.currentTarget.style.background = '#F8FAFC' }}
                 onMouseLeave={e => { if (activePage !== item.key) e.currentTarget.style.background = 'transparent' }}
               >
-                <div>
-                  <div style={{
-                    fontSize: '12px', fontWeight: '600', lineHeight: 1.2,
-                    color: activePage === item.key ? '#01847C' : '#0F172A',
-                  }}>
-                    {item.label}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>{item.desc}</div>
+                <div style={{
+                  fontSize: '12px', fontWeight: '600', lineHeight: 1.2,
+                  color: activePage === item.key ? '#01847C' : '#0F172A',
+                }}>
+                  {item.label}
                 </div>
+                <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>{item.desc}</div>
               </button>
             ))}
           </nav>
 
-          {/* User info + logout */}
+          {/* User + logout */}
           <div style={{ padding: '12px 16px', borderTop: '1px solid #F1F5F9' }}>
             <div style={{ fontSize: '11px', fontWeight: '600', color: '#0F172A', marginBottom: '2px' }}>{user.name}</div>
             <div style={{ fontSize: '10px', color: '#94A3B8', marginBottom: '10px' }}>Admin BSI</div>
@@ -115,15 +128,16 @@ export default function App() {
         {/* Main content */}
         <div style={{ marginLeft: '200px', flex: 1, minWidth: 0 }}>
           {activePage === 'ojk'
-            ? <DashboardPage user={user} onLogout={logout} hideSidebar />
+            ? <DashboardPage    user={user} onLogout={logout} hideSidebar />
             : activePage === 'branch'
             ? <BranchTestingPage user={user} onLogout={logout} hideSidebar />
-            : <FDRMasterPage user={user} hideSidebar />
+            : <FDRMasterPage    user={user} onLogout={logout} hideSidebar />
           }
         </div>
       </div>
     )
   }
 
+  // Fallback — unknown role → login
   return <LoginPage onLogin={login} />
 }

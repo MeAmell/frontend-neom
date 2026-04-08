@@ -886,7 +886,7 @@ function UploadFDRPanel({ onSuccess }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function FDRMasterPage({ user, onLogout }) {
+export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [fdrData,     setFdrData]     = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -1069,10 +1069,12 @@ export default function FDRMasterPage({ user, onLogout }) {
       {/* ── MAIN BODY ── */}
       <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
-        {/* ── UPLOAD PANEL — admin only, hidden from OJK view ── */}
-        <div style={{ marginBottom: '20px' }}>
-          <UploadFDRPanel onSuccess={loadData} />
-        </div>
+        {/* ── UPLOAD PANEL — admin only, hidden from presenter/OJK view ── */}
+        {!readOnly && (
+          <div style={{ marginBottom: '20px' }}>
+            <UploadFDRPanel onSuccess={loadData} />
+          </div>
+        )}
 
         {/* ── ROW 1: Donut card + 3 Summary Cards ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
