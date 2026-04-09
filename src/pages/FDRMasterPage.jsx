@@ -383,55 +383,139 @@ const STAGE_COLORS = {
   'STAGE 5': '#94A3B8',
 }
 
-// ── Mini Gantt Bar ─────────────────────────────────────────────────────────────
-function GanttBar({ planStart, planEnd, actualStart, actualEnd, status }) {
+// ── Delta Badge (replaces Gantt Bar) ──────────────────────────────────────────
+function DeltaBadge({ planStart, planEnd, actualStart, actualEnd, status, actStatus }) {
   const ps = parseDate(planStart), pe = parseDate(planEnd)
   const as = parseDate(actualStart), ae = parseDate(actualEnd)
-  if (!ps || !pe) return <span style={{ fontSize: '11px', color: '#CBD5E1' }}>—</span>
 
-  // Compute timeline window: earliest start to latest end
-  const minT = Math.min(ps.getTime(), as ? as.getTime() : ps.getTime())
-  const maxT = Math.max(pe.getTime(), ae ? ae.getTime() : pe.getTime(), ps.getTime() + 3600000)
-  const span = maxT - minT || 3600000
+  const fmtShort = d => d
+    ? d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' '
+      + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : '—'
 
-  const toX = t => ((t - minT) / span) * 100
+  // ── Compute delta ──
+  // Compare plan end vs actual end (if done), or plan end vs now (if in progress)
+  let deltaMs   = null
+  let deltaLabel = null
+  let deltaStyle = {}
+  let deltaIcon  = ''
 
-  const planL  = toX(ps.getTime())
-  const planW  = Math.max(toX(pe.getTime()) - planL, 1)
-  const actL   = as ? toX(as.getTime()) : null
-  const actW   = as && ae ? Math.max(toX(ae.getTime()) - actL, 1) : as ? Math.max(toX(Date.now()) - actL, 1) : null
+  const isInProg   = (actStatus || '').toLowerCase().includes('in progress')
+  const isDone     = (actStatus || '').toLowerCase().includes('done')
+  const refActual  = isDone ? ae : isInProg ? new Date() : null
 
-  const isDelayed = (status || '').toLowerCase().includes('delayed')
-  const isAhead   = (status || '').toLowerCase().includes('ahead')
-  const actColor  = isDelayed ? '#F59E0B' : isAhead ? '#01847C' : '#3B82F6'
+  if (ps && pe && refActual) {
+    // Positive = late, Negative = early
+    deltaMs = refActual.getTime() - pe.getTime()
+    const absMin  = Math.round(Math.abs(deltaMs) / 60000)
+    const absHour = Math.floor(absMin / 60)
+    const remMin  = absMin % 60
 
-  const fmtShort = d => d ? d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''
+    const fmt = absHour > 0
+      ? `${absHour}j ${remMin > 0 ? remMin + 'm' : ''}`.trim()
+      : `${absMin}m`
+
+    if (Math.abs(deltaMs) < 5 * 60000) {
+      // within 5 min = on-track
+      deltaLabel = 'On-track'
+      deltaIcon  = '✓'
+      deltaStyle = { bg: '#DCFCE7', color: '#166534', border: '#BBF7D0' }
+    } else if (deltaMs < 0) {
+      // finished/running ahead of plan
+      deltaLabel = `Ahead ${fmt}`
+      deltaIcon  = '⚡'
+      deltaStyle = { bg: '#DBEAFE', color: '#1E40AF', border: '#BFDBFE' }
+    } else {
+      // behind plan
+      deltaLabel = `Delay +${fmt}`
+      deltaIcon  = '⚠'
+      deltaStyle = { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' }
+    }
+  }
+
+  // In-progress: show elapsed % bar
+  let elapsedPct = null
+  if (isInProg && ps && pe) {
+    const now   = Date.now()
+    const total = pe.getTime() - ps.getTime()
+    elapsedPct  = total > 0 ? Math.min(100, Math.max(0, ((now - ps.getTime()) / total) * 100)) : 0
+  }
 
   return (
-    <div title={`Plan: ${fmtShort(ps)} → ${fmtShort(pe)}\nActual: ${fmtShort(as)} → ${fmtShort(ae)}`}>
-      {/* Timeline track */}
-      <div style={{ position: 'relative', height: '28px', background: '#F8FAFC', borderRadius: '6px', overflow: 'hidden' }}>
-        {/* Plan bar */}
-        <div style={{
-          position: 'absolute', top: '6px', height: '8px',
-          left: `${planL}%`, width: `${planW}%`,
-          background: '#CBD5E1', borderRadius: '4px', minWidth: '3px',
-        }} />
-        {/* Actual bar */}
-        {actL !== null && actW !== null && (
+    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+      {/* ── Time rows ── */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {/* Plan */}
+        {ps && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '5px 10px' }}>
+            <span style={{ fontSize: '10px', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.4px' }}>Plan</span>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569', fontFamily: 'monospace' }}>
+              {fmtShort(ps)}
+            </span>
+            {pe && (
+              <>
+                <span style={{ fontSize: '10px', color: '#CBD5E1' }}>→</span>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569', fontFamily: 'monospace' }}>{fmtShort(pe)}</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Actual */}
+        {as && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F0FDF9', border: '1px solid #6EE7B7', borderRadius: '8px', padding: '5px 10px' }}>
+            <span style={{ fontSize: '10px', fontWeight: '700', color: '#059669', textTransform: 'uppercase', letterSpacing: '.4px' }}>actual</span>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: '#065F46', fontFamily: 'monospace' }}>
+              {fmtShort(as)}
+            </span>
+            {ae && (
+              <>
+                <span style={{ fontSize: '10px', color: '#6EE7B7' }}>→</span>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#065F46', fontFamily: 'monospace' }}>{fmtShort(ae)}</span>
+              </>
+            )}
+            {!ae && isInProg && (
+              <>
+                <span style={{ fontSize: '10px', color: '#6EE7B7' }}>→</span>
+                <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '700', fontFamily: 'monospace' }}>sedang berjalan…</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Delta badge */}
+        {deltaLabel && (
           <div style={{
-            position: 'absolute', top: '14px', height: '8px',
-            left: `${Math.max(0, actL)}%`, width: `${Math.min(actW, 100 - Math.max(0, actL))}%`,
-            background: actColor, borderRadius: '4px', minWidth: '3px',
-            opacity: 0.9,
-          }} />
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            background: deltaStyle.bg, color: deltaStyle.color,
+            border: `1px solid ${deltaStyle.border}`,
+            borderRadius: '8px', padding: '5px 12px',
+            fontSize: '12px', fontWeight: '800', whiteSpace: 'nowrap',
+          }}>
+            <span>{deltaIcon}</span>
+            <span>{deltaLabel}</span>
+          </div>
         )}
       </div>
-      {/* Labels */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
-        <span style={{ fontSize: '10px', color: '#94A3B8', fontFamily: 'monospace' }}>{fmtShort(ps)}</span>
-        <span style={{ fontSize: '10px', color: '#94A3B8', fontFamily: 'monospace' }}>{fmtShort(pe)}</span>
-      </div>
+
+      {/* ── In-progress elapsed bar ── */}
+      {elapsedPct !== null && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+            <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: '600' }}>Elapsed</span>
+            <span style={{ fontSize: '10px', color: '#E8A030', fontWeight: '700' }}>{elapsedPct.toFixed(0)}%</span>
+          </div>
+          <div style={{ height: '5px', borderRadius: '99px', background: '#F1F5F9', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: '99px',
+              width: `${elapsedPct}%`,
+              background: elapsedPct > 100 ? '#EF4444' : '#E8A030',
+              transition: 'width .6s ease',
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -492,35 +576,16 @@ function ActivityCard({ act, index }) {
           <StatusPill label={act.status} />
         </div>
 
-        {/* Gantt timeline */}
+        {/* Delta timeline */}
         {act.plan_start && (
-          <div style={{ marginTop: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ width: '10px', height: '4px', background: '#CBD5E1', borderRadius: '2px', display: 'inline-block' }} />
-                <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: '600' }}>Plan</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ width: '10px', height: '4px', background: ss.dot, borderRadius: '2px', display: 'inline-block' }} />
-                <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: '600' }}>Actual</span>
-              </div>
-              {act.progress_status && (
-                <span style={{
-                  marginLeft: 'auto', fontSize: '10px', fontWeight: '700',
-                  color: act.progress_status.includes('Ahead') ? '#166534' :
-                         act.progress_status.includes('Delayed') ? '#92400E' : '#1E40AF',
-                  background: act.progress_status.includes('Ahead') ? '#DCFCE7' :
-                              act.progress_status.includes('Delayed') ? '#FEF3C7' : '#DBEAFE',
-                  padding: '1px 8px', borderRadius: '99px',
-                }}>⏱ {act.progress_status}</span>
-              )}
-            </div>
-            <GanttBar
-              planStart={act.plan_start} planEnd={act.plan_end}
-              actualStart={act.actual_start} actualEnd={act.actual_end}
-              status={act.progress_status}
-            />
-          </div>
+          <DeltaBadge
+            planStart={act.plan_start}
+            planEnd={act.plan_end}
+            actualStart={act.actual_start}
+            actualEnd={act.actual_end}
+            status={act.progress_status}
+            actStatus={act.status}
+          />
         )}
       </div>
     </div>
@@ -566,7 +631,7 @@ function DetailAktivitas({ items = [] }) {
   const stages = ['ALL', ...stageNames]
   const statusGroups = ['ALL', 'Done', 'In Progress', 'Not Started', 'Delayed', 'N/A']
 
-  // Helper: return raw value as-is so parseDate() can handle it (ISO strings from backend)
+  // Helper: parse date safely, return null if invalid
   const safeDate = (val) => {
     if (!val) return null
     const d = new Date(val)
@@ -734,8 +799,9 @@ function DetailAktivitas({ items = [] }) {
           </div>
         ))}
         <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#94A3B8' }}>
-          Gantt: <span style={{ color: '#CBD5E1', fontWeight: '600' }}>■</span> Plan &nbsp;
-          <span style={{ color: '#01847C', fontWeight: '600' }}>■</span> Actual
+          Delta: <span style={{ color: '#DCFCE7', fontWeight: '600', background: '#166534', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>✓ On-track</span>
+          {' '}<span style={{ color: '#1E40AF', fontWeight: '600', background: '#DBEAFE', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>⚡ Ahead</span>
+          {' '}<span style={{ color: '#92400E', fontWeight: '600', background: '#FEF3C7', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>⚠ Delay</span>
         </span>
       </div>
 
