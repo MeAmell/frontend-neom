@@ -237,9 +237,6 @@ function GanttTimeline() {
 function TodayActivities({ activities = [] }) {
   const today = new Date()
   const todayLabel = today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  const doneCount   = activities.filter(a => a.status === 'Done').length
-  const inProgCount = activities.filter(a => a.status === 'In Progress').length
-  const notStCount  = activities.filter(a => a.status === 'Not Started').length
 
   if (activities.length === 0) return (
     <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
@@ -249,47 +246,54 @@ function TodayActivities({ activities = [] }) {
     </div>
   )
 
+  const statusMap = {
+    'Done':        { bg: '#F0FDF4', color: '#16A34A', dot: '#16A34A' },
+    'In Progress': { bg: '#FFFBEB', color: '#D97706', dot: '#E8A030' },
+    'Not Started': { bg: '#F8FAFC', color: '#64748B', dot: '#CBD5E1' },
+  }
+
   return (
-    <div>
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-        {[
-          { label: 'Done',        count: doneCount,   color: '#01847C', bg: '#F0FDF9' },
-          { label: 'In Progress', count: inProgCount, color: '#E8A030', bg: '#FFFBEB' },
-          { label: 'Not Started', count: notStCount,  color: '#94A3B8', bg: '#F8FAFC' },
-        ].map(s => (
-          <div key={s.label} style={{ flex: 1, padding: '10px 12px', background: s.bg, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '500' }}>{s.label}</span>
-            <span style={{ fontSize: '18px', fontWeight: '800', color: s.color }}>{s.count}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
-        {activities.map((act, i) => {
-          const ss = statusStyle(act.status)
-          const isActive = act.status === 'In Progress'
-          return (
-            <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '12px 14px', background: isActive ? '#FFFBEB' : '#F8FAFC', borderRadius: '12px', border: `1.5px solid ${isActive ? '#E8A03040' : '#F1F5F9'}`, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px', background: ss.dot, borderRadius: '12px 0 0 12px' }} />
-              <div style={{ flexShrink: 0, textAlign: 'center', background: '#fff', borderRadius: '8px', padding: '6px 8px', border: '1px solid #E2E8F0', minWidth: '58px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', lineHeight: 1 }}>{fmtTime(act.planned_start)}</div>
-                <div style={{ fontSize: '9px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>→ {fmtTime(act.planned_end)}</div>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                  {act.stage && <span style={{ background: '#0F172A', color: '#fff', borderRadius: '4px', padding: '1px 6px', fontSize: '9px', fontWeight: '800' }}>{act.stage}</span>}
-                  {act.event && <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '500' }}>{act.event}</span>}
-                </div>
-                <p style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, margin: 0 }}>{act.activity}</p>
-                {act.area && <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', margin: 0 }}>Area: {act.area}</p>}
-              </div>
-              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                <StatusChip status={act.status} />
-                {act.progress > 0 && <span style={{ fontSize: '11px', fontWeight: '700', color: ss.color }}>{Math.round(act.progress * 100)}%</span>}
-              </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '10px' }}>
+      {activities.map((act, i) => {
+        const ss = statusStyle(act.status)
+        const scMap = { 'STAGE 0': '#6366F1', 'STAGE 1': '#0EA5E9', 'STAGE 2': '#01847C', 'STAGE 3': '#8B5CF6', 'STAGE 4': '#E8A030', 'STAGE 5': '#94A3B8' }
+        const stageColor = scMap[(act.stage || '').toUpperCase()] || '#64748B'
+        const isActive = act.status === 'In Progress'
+        const sc = statusMap[act.status] || statusMap['Not Started']
+        return (
+          <div key={i} style={{
+            background: '#fff', borderRadius: '14px',
+            border: `1.5px solid ${isActive ? '#E8A030' : '#F1F5F9'}`,
+            padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start',
+            boxShadow: isActive ? '0 4px 16px rgba(232,160,48,.12)' : '0 1px 4px rgba(0,0,0,.04)',
+          }}>
+            {/* Left: time */}
+            <div style={{ minWidth: '52px', textAlign: 'center', flexShrink: 0, background: '#F8FAFC', borderRadius: '8px', padding: '6px 8px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', lineHeight: 1, fontFamily: 'monospace' }}>{fmtTime(act.planned_start)}</div>
+              <div style={{ fontSize: '9px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>→ {fmtTime(act.planned_end)}</div>
             </div>
-          )
-        })}
-      </div>
+            {/* Center */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                {act.stage && <span style={{ background: stageColor, color: '#fff', borderRadius: '5px', padding: '1px 7px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{act.stage}</span>}
+                {act.event && <span style={{ fontSize: '10px', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{act.event}</span>}
+              </div>
+              <p style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, margin: 0 }}>{act.activity}</p>
+              {act.area && <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', margin: 0 }}>Area: {act.area}</p>}
+            </div>
+            {/* Right: status */}
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: sc.bg, color: sc.color, borderRadius: '99px', padding: '2px 8px', fontSize: '10px', fontWeight: '700' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: sc.dot }} />
+                {act.status}
+              </span>
+              <span style={{ fontSize: '10px', color: act.progress > 0 ? '#16A34A' : '#94A3B8', fontWeight: '700' }}>
+                {act.progress > 0 ? '✓ Done' : '○ Pending'}
+              </span>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -709,90 +713,56 @@ export default function DashboardPage({ user, onLogout }) {
           </div>
         </div>
 
-        {/* ── ROW 3: Gantt + Today Activities ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px', marginBottom: '24px' }}>
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <div>
-                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Timeline NEOM 2026</h2>
-                <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Jan – Jun 2026 · Garis merah = Hari ini</p>
-              </div>
-              <span style={{ background: '#F1F5F9', borderRadius: '8px', padding: '4px 12px', fontSize: '11px', color: '#64748B', fontWeight: '600', fontFamily: 'monospace' }}>
-                {today.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-              </span>
+        {/* ── ROW 3: Gantt (full width) ── */}
+        <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Timeline NEOM 2026</h2>
+              <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Jan – Jun 2026 · Garis merah = Hari ini</p>
             </div>
-            <GanttTimeline />
+            <span style={{ background: '#F1F5F9', borderRadius: '8px', padding: '4px 12px', fontSize: '11px', color: '#64748B', fontWeight: '600', fontFamily: 'monospace' }}>
+              {today.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
           </div>
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <GanttTimeline />
+        </div>
+
+        {/* ── ROW 4: Aktivitas Hari Ini (full width) ── */}
+        <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', border: '2px solid rgba(1,132,124,.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#01847C', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
               <div>
                 <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Aktivitas Hari Ini</h2>
                 <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>{todayLabel}</p>
               </div>
-              {filteredTodayActs.length > 0 && (
-                <span style={{ background: '#01847C', color: '#fff', borderRadius: '99px', padding: '3px 10px', fontSize: '11px', fontWeight: '700' }}>{filteredTodayActs.length} aktivitas</span>
-              )}
             </div>
-            <TodayActivities activities={filteredTodayActs} />
+            <span style={{ background: filteredTodayActs.length > 0 ? '#01847C' : '#94A3B8', color: '#fff', borderRadius: '99px', padding: '2px 10px', fontSize: '11px', fontWeight: '700' }}>
+              {filteredTodayActs.length} aktivitas
+            </span>
           </div>
+          <TodayActivities activities={filteredTodayActs} />
         </div>
 
-        {/* ── ROW 4: OJK Activities + Detail Summary ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', marginBottom: '24px' }}>
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>
-                Aktivitas per Stage — OJK View
-                {groupedFdrStages.length > 0 && (
-                  <span style={{ fontSize: '11px', fontWeight: '500', color: '#94A3B8', marginLeft: '8px' }}>
-                    dari Excel FDR · {ojkActivityStages.length} stage
-                    {activeStageKey && ` · filter: ${activeStageKey}`}
-                  </span>
-                )}
-              </h2>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {[{ bg: '#EFF6FF', text: '#1D4ED8', label: 'Pre-Cutover' }, { bg: '#FFF7ED', text: '#C2410C', label: 'Cutover' }, { bg: '#F0FDF4', text: '#15803D', label: 'Post' }].map(p => (
-                  <span key={p.label} style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '99px', background: p.bg, color: p.text }}>{p.label}</span>
-                ))}
-              </div>
+        {/* ── ROW 5: OJK Activities (full width) ── */}
+        <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>
+              Aktivitas per Stage — OJK View
+              {groupedFdrStages.length > 0 && (
+                <span style={{ fontSize: '11px', fontWeight: '500', color: '#94A3B8', marginLeft: '8px' }}>
+                  dari Excel FDR · {ojkActivityStages.length} stage
+                  {activeStageKey && ` · filter: ${activeStageKey}`}
+                </span>
+              )}
+            </h2>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {[{ bg: '#EFF6FF', text: '#1D4ED8', label: 'Pre-Cutover' }, { bg: '#FFF7ED', text: '#C2410C', label: 'Cutover' }, { bg: '#F0FDF4', text: '#15803D', label: 'Post' }].map(p => (
+                <span key={p.label} style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '99px', background: p.bg, color: p.text }}>{p.label}</span>
+              ))}
             </div>
-            <OJKActivities stages={ojkActivityStages} />
           </div>
-
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A', marginBottom: '16px' }}>Detail Summary</h2>
-            {detail.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #F1F5F9' }}>
-                    {['Area', 'Status', 'Progress', 'Notes'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '8px 4px', fontSize: '11px', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '.5px' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.map((d, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #F8FAFC' }}>
-                      <td style={{ padding: '10px 4px', fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{d.area}</td>
-                      <td style={{ padding: '10px 4px' }}><RAGBadge status={d.status} /></td>
-                      <td style={{ padding: '10px 4px', width: '90px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <div style={{ flex: 1 }}><ProgressBar value={d.progress} color={d.status === 'GREEN' ? '#16A34A' : d.status === 'RED' ? '#DC2626' : '#D97706'} height={5} /></div>
-                          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748B' }}>{d.progress}%</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 4px', fontSize: '12px', color: '#64748B' }}>{d.notes || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📊</div>
-                <p style={{ fontSize: '13px', fontWeight: '600' }}>Data belum tersedia</p>
-              </div>
-            )}
-          </div>
+          <OJKActivities stages={ojkActivityStages} />
         </div>
 
         {/* ── ROW 5: Operational Readiness ── */}

@@ -147,7 +147,10 @@ function IssueList({ branches }) {
             fontSize: '9px', fontWeight: '800', color: C.failedDark,
           }}>{i + 1}</span>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: '#0F172A' }}>{b.kantor_cabang}</div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: '#0F172A' }}>
+              {b.kantor_cabang}
+              {b.kode_cabang ? <span style={{ fontWeight: '400', color: C.muted, marginLeft: '6px', fontFamily: 'monospace', fontSize: '10px' }}>{b.kode_cabang}</span> : null}
+            </div>
             <div style={{ fontSize: '11px', color: C.failedDark, marginTop: '1px', opacity: .85 }}>{b.keterangan}</div>
           </div>
         </div>
@@ -173,7 +176,10 @@ function RegionalBreakdown({ branches }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
       {rows.map(([regional, stat]) => {
         const pct       = stat.total > 0 ? Math.round((stat.passed / stat.total) * 100) : 0
-        const shortName = regional.replace(/Region\s+\w+\s+-\s+/, '')
+        const shortName = regional
+          .replace(/^Regional\s+\S+\s+-\s+/i, '')   // strip "Regional 01 - "
+          .replace(/^Region\s+\w+\s+-\s+/i,  '')   // strip legacy "Region II - "
+          || regional
         return (
           <div key={regional} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ fontSize: '11px', color: C.slate, minWidth: '130px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={regional}>
@@ -198,10 +204,19 @@ function RegionalBreakdown({ branches }) {
 function BranchRow({ branch, onClickFailed }) {
   return (
     <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-      <td style={{ padding: '10px 14px', fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{branch.kantor_cabang}</td>
-      <td style={{ padding: '10px 14px', fontSize: '12px', color: C.slate }}>{branch.nama}</td>
+      <td style={{ padding: '10px 14px' }}>
+        <div style={{ fontSize: '13px', fontWeight: '600', color: '#0F172A' }}>{branch.kantor_cabang}</div>
+        {branch.kode_cabang && (
+          <div style={{ fontSize: '10px', color: C.muted, marginTop: '2px', fontFamily: 'monospace' }}>{branch.kode_cabang}</div>
+        )}
+      </td>
+      <td style={{ padding: '10px 14px', fontSize: '12px', color: C.slate }}>
+        {branch.area || branch.nama || '—'}
+      </td>
       <td style={{ padding: '10px 14px' }}><StatusPill status={branch.status} /></td>
-      <td style={{ padding: '10px 14px', fontSize: '11px', color: C.muted, fontFamily: 'monospace' }}>{branch.tanggal}</td>
+      <td style={{ padding: '10px 14px', fontSize: '11px', color: C.muted, fontFamily: 'monospace' }}>
+        {branch.tanggal || '—'}
+      </td>
       <td style={{ padding: '10px 14px' }}>
         {branch.status === 'Failed' && (
           <button onClick={() => onClickFailed(branch)} style={{
@@ -231,7 +246,12 @@ function FailedModal({ branch, onClose }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
             <div style={{ fontWeight: '700', fontSize: '16px', color: '#0F172A' }}>{branch.kantor_cabang}</div>
-            <div style={{ fontSize: '12px', color: C.slate, marginTop: '2px' }}>{branch.regional} · {branch.nama}</div>
+            <div style={{ fontSize: '12px', color: C.slate, marginTop: '2px' }}>
+              {branch.regional}
+              {branch.area ? ` · ${branch.area}` : ''}
+              {branch.kode_cabang ? ` · ${branch.kode_cabang}` : ''}
+              {branch.nama ? ` · ${branch.nama}` : ''}
+            </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', color: C.muted, cursor: 'pointer', lineHeight: 1 }}>×</button>
         </div>
@@ -399,7 +419,7 @@ function ChannelPanel({ data, channelName, accentColor }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: C.surface, borderBottom: `2px solid ${C.border}` }}>
-              {[channelName === 'EXA' ? 'Kantor Cabang (KC)' : 'Area', 'Tester', 'Status', 'Tanggal', 'Aksi'].map(h => (
+              {[channelName === 'EXA' ? 'Kantor Cabang (KC)' : 'Area / Cabang', 'Area / Tester', 'Status', 'Tanggal', 'Aksi'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '.5px', whiteSpace: 'nowrap' }}>
                   {h}
                 </th>

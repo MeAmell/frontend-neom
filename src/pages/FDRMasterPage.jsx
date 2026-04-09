@@ -358,12 +358,20 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
 
 
 
-// ── Helpers: parse datetime string "dd/MM/yyyy HH:mm" ─────────────────────────
+// ── Helpers: parse datetime string ─────────────────────────────────────────────
 function parseDate(str) {
   if (!str || str.includes('--') || str.includes('#')) return null
+  // Try direct parse first (ISO / locale string from safeDate)
+  const direct = new Date(str)
+  if (!isNaN(direct.getTime())) return direct
+  // Try "dd/MM/yyyy HH:mm" format
   const [datePart, timePart] = str.split(' ')
-  const [d, m, y] = datePart.split('/')
-  return new Date(`${y}-${m}-${d}T${timePart || '00:00'}`)
+  if (!datePart) return null
+  const parts = datePart.split('/')
+  if (parts.length !== 3) return null
+  const [d, m, y] = parts
+  const result = new Date(`${y}-${m}-${d}T${timePart || '00:00'}`)
+  return isNaN(result.getTime()) ? null : result
 }
 
 const STAGE_COLORS = {
@@ -558,23 +566,41 @@ function DetailAktivitas({ items = [] }) {
   const stages = ['ALL', ...stageNames]
   const statusGroups = ['ALL', 'Done', 'In Progress', 'Not Started', 'Delayed', 'N/A']
 
+  // Helper: return raw value as-is so parseDate() can handle it (ISO strings from backend)
+  const safeDate = (val) => {
+    if (!val) return null
+    const d = new Date(val)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  }
+
   // Map Excel rows → same shape as old ALL_ACTIVITIES
-  const allActivities = items.map(r => ({
-    stage:           r.Stage || '',
-    stageStatus:     r.Status || '',
-    activity:        r.Activity || '',
-    status:          r.Status || '',
-    plan_start:      r['Planned Start Time'] ? new Date(r['Planned Start Time']).toLocaleString('id-ID') : null,
-    plan_end:        r['Planned End Time']   ? new Date(r['Planned End Time']).toLocaleString('id-ID')   : null,
-    actual_start:    r['Actual Start Time']  ? new Date(r['Actual Start Time']).toLocaleString('id-ID')  : null,
-    actual_end:      r['Actual End Time']    ? new Date(r['Actual End Time']).toLocaleString('id-ID')    : null,
-    progress_status: r.Remarks || null,
-    event:           r.Event || '',
-    timeline:        r.Timeline || '',
-    is_parallel:     r['Is Parallel'] || false,
-    planned_dur:     r['Planned Duration'] || null,
-    actual_dur:      r['Actual Duration'] || null,
-  }))
+  // Skip rows that are effectively empty (no activity name AND no stage)
+  const allActivities = items
+    .filter(r => {
+      const activity = (r.Activity || '').toString().trim()
+      const stage    = (r.Stage    || '').toString().trim()
+      // Skip if both activity and stage are empty/whitespace
+      if (!activity && !stage) return false
+      // Skip if activity is empty (row has no meaningful content to display)
+      if (!activity) return false
+      return true
+    })
+    .map(r => ({
+      stage:           r.Stage || '',
+      stageStatus:     r.Status || '',
+      activity:        r.Activity || '',
+      status:          r.Status || '',
+      plan_start:      safeDate(r['Planned Start Time']),
+      plan_end:        safeDate(r['Planned End Time']),
+      actual_start:    safeDate(r['Actual Start Time']),
+      actual_end:      safeDate(r['Actual End Time']),
+      progress_status: r.Remarks || null,
+      event:           r.Event || '',
+      timeline:        r.Timeline || '',
+      is_parallel:     r['Is Parallel'] || false,
+      planned_dur:     r['Planned Duration'] || null,
+      actual_dur:      r['Actual Duration'] || null,
+    }))
 
   const filtered = allActivities.filter(a => {
     const matchStage  = filterStage  === 'ALL' || a.stage === filterStage
@@ -922,9 +948,13 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
     const todayStr = new Date().toDateString()
     return items
       .filter(r => {
+        const activity = (r.Activity || '').toString().trim()
+        if (!activity) return false
         const ps = r['Planned Start Time']
         if (!ps) return false
-        return new Date(ps).toDateString() === todayStr
+        const d = new Date(ps)
+        if (isNaN(d.getTime())) return false
+        return d.toDateString() === todayStr
       })
       .map(r => ({
         stage:         r.Stage        || '',
