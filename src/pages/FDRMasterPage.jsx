@@ -338,17 +338,27 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
   })
 
   return (
-    <div style={{ position: 'relative', width: `${size}px`, height: `${size}px`, margin: '0 auto' }}>
-      <svg viewBox={`0 0 ${VB} ${VB}`} style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)', display: 'block' }}>
+    <div style={{ width: `${size}px`, height: `${size}px`, margin: '0 auto' }}>
+      <svg viewBox={`0 0 ${VB} ${VB}`} style={{ width: '100%', height: '100%', display: 'block' }}>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="22" />
-        {paths}
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 'clamp(16px,8%,28px)', fontWeight: '900', color: '#01847C', lineHeight: 1 }}>
+        <g transform={`rotate(-90 ${cx} ${cy})`}>
+          {paths}
+        </g>
+        <text
+          x={cx} y={cy - 12}
+          textAnchor="middle" dominantBaseline="middle"
+          style={{ fontSize: '28px', fontWeight: '900', fill: '#01847C', fontFamily: 'inherit' }}
+        >
           {completed.toFixed(1)}%
-        </span>
-        <span style={{ fontSize: 'clamp(9px,4%,11px)', color: '#94A3B8', fontWeight: '500', marginTop: '2px' }}>Completed</span>
-      </div>
+        </text>
+        <text
+          x={cx} y={cy + 18}
+          textAnchor="middle" dominantBaseline="middle"
+          style={{ fontSize: '13px', fontWeight: '500', fill: '#94A3B8', fontFamily: 'inherit' }}
+        >
+          Completed
+        </text>
+      </svg>
     </div>
   )
 }
