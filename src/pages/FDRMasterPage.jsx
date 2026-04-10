@@ -365,6 +365,232 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
 
 
 
+// ── Overall Timing Summary (SEVP view) ───────────────────────────────────────
+function OverallTimingSummary({ items = [] }) {
+  const stageOrder = ['Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5']
+  const STAGE_COLORS_OTS = {
+    'Stage 0': '#6366F1', 'Stage 1': '#0EA5E9', 'Stage 2': '#01847C',
+    'Stage 3': '#8B5CF6', 'Stage 4': '#E8A030', 'Stage 5': '#94A3B8',
+  }
+
+  // Build per-activity timing category
+  const cats = { ahead: 0, ontrack: 0, delay: 0, nodata: 0 }
+  const stageBreakdown = {}
+  stageOrder.forEach(s => { stageBreakdown[s] = { ahead: 0, ontrack: 0, delay: 0, nodata: 0, total: 0 } })
+
+  items.forEach(r => {
+    const stage  = r.Stage || ''
+    const status = (r.Status || '').toLowerCase()
+    if (!stageBreakdown[stage]) return
+
+    const isDone   = status.includes('done')
+    const isInProg = status.includes('in progress')
+    if (!isDone && !isInProg) { cats.nodata++; stageBreakdown[stage].nodata++; stageBreakdown[stage].total++; return }
+
+    const pe = r['Planned End Time']   ? new Date(r['Planned End Time'])   : null
+    const ae = r['Actual End Time']    ? new Date(r['Actual End Time'])    : null
+    const ps = r['Planned Start Time'] ? new Date(r['Planned Start Time']) : null
+
+    const ref = isDone ? ae : isInProg ? new Date() : null
+    if (!pe || !ref || isNaN(pe) || isNaN(ref)) {
+      cats.nodata++; stageBreakdown[stage].nodata++; stageBreakdown[stage].total++; return
+    }
+
+    const deltaMs = ref.getTime() - pe.getTime()
+    let cat
+    if (Math.abs(deltaMs) < 5 * 60000)   cat = 'ontrack'
+    else if (deltaMs < 0)                 cat = 'ahead'
+    else                                  cat = 'delay'
+
+    cats[cat]++
+    stageBreakdown[stage][cat]++
+    stageBreakdown[stage].total++
+  })
+
+  const total = cats.ahead + cats.ontrack + cats.delay + cats.nodata
+  const assessed = cats.ahead + cats.ontrack + cats.delay
+  if (total === 0) return null
+
+  const aheadPct   = assessed > 0 ? Math.round((cats.ahead   / assessed) * 100) : 0
+  const ontrackPct = assessed > 0 ? Math.round((cats.ontrack / assessed) * 100) : 0
+  const delayPct   = assessed > 0 ? Math.round((cats.delay   / assessed) * 100) : 0
+
+  const tiles = [
+    {
+      key: 'ahead',
+      icon: '⚡',
+      label: 'Lebih Cepat',
+      count: cats.ahead,
+      pct: aheadPct,
+      bg: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',
+      accent: '#1E40AF',
+      bar: '#3B82F6',
+      border: '#BFDBFE',
+      sub: 'aktivitas selesai lebih cepat dari rencana',
+    },
+    {
+      key: 'ontrack',
+      icon: '✅',
+      label: 'On-Track',
+      count: cats.ontrack,
+      pct: ontrackPct,
+      bg: 'linear-gradient(135deg, #F0FDF9 0%, #DCFCE7 100%)',
+      accent: '#166534',
+      bar: '#16A34A',
+      border: '#BBF7D0',
+      sub: 'aktivitas berjalan sesuai rencana',
+    },
+    {
+      key: 'delay',
+      icon: '⚠️',
+      label: 'Delay',
+      count: cats.delay,
+      pct: delayPct,
+      bg: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+      accent: '#92400E',
+      bar: '#D97706',
+      border: '#FDE68A',
+      sub: 'aktivitas berjalan melebihi waktu rencana',
+    },
+  ]
+
+  const overallHealth =
+    delayPct > 30  ? { label: 'Perlu Perhatian', color: '#92400E', bg: '#FEF3C7', icon: '⚠️' } :
+    delayPct > 10  ? { label: 'Cukup Baik',      color: '#854D0E', bg: '#FEF9C3', icon: '📊' } :
+    aheadPct > 40  ? { label: 'Sangat Baik',      color: '#166534', bg: '#DCFCE7', icon: '🚀' } :
+                     { label: 'Baik',              color: '#166534', bg: '#DCFCE7', icon: '✅' }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '20px', padding: '28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', border: '1.5px solid #F1F5F9' }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Ringkasan Ketepatan Waktu</h2>
+            <span style={{ background: overallHealth.bg, color: overallHealth.color, borderRadius: '99px', padding: '3px 12px', fontSize: '11px', fontWeight: '700' }}>
+              {overallHealth.icon} {overallHealth.label}
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: '#94A3B8' }}>
+            Berdasarkan <strong style={{ color: '#0F172A' }}>{assessed}</strong> aktivitas yang sudah berjalan dari total {total} aktivitas
+          </p>
+        </div>
+        {/* Stacked horizontal bar */}
+        <div style={{ minWidth: '220px', flex: '0 0 auto' }}>
+          <div style={{ display: 'flex', height: '12px', borderRadius: '99px', overflow: 'hidden', gap: '2px', marginBottom: '6px' }}>
+            {aheadPct   > 0 && <div style={{ flex: aheadPct,   background: '#3B82F6', transition: 'flex 1s' }} title={`Lebih Cepat: ${aheadPct}%`} />}
+            {ontrackPct > 0 && <div style={{ flex: ontrackPct, background: '#16A34A', transition: 'flex 1s' }} title={`On-Track: ${ontrackPct}%`} />}
+            {delayPct   > 0 && <div style={{ flex: delayPct,   background: '#D97706', transition: 'flex 1s' }} title={`Delay: ${delayPct}%`} />}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            {[
+              { color: '#3B82F6', label: `⚡ ${aheadPct}%` },
+              { color: '#16A34A', label: `✓ ${ontrackPct}%` },
+              { color: '#D97706', label: `⚠ ${delayPct}%` },
+            ].map(l => (
+              <span key={l.label} style={{ fontSize: '10px', color: l.color, fontWeight: '700' }}>{l.label}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── 3 KPI Tiles ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
+        {tiles.map(t => (
+          <div key={t.key} style={{
+            background: t.bg, borderRadius: '16px', padding: '20px 22px',
+            border: `1.5px solid ${t.border}`, position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ fontSize: '22px', marginBottom: '8px' }}>{t.icon}</div>
+            <div style={{ fontSize: '32px', fontWeight: '800', color: t.accent, lineHeight: 1 }}>{t.count}</div>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: t.accent, lineHeight: 1, marginTop: '2px' }}>{t.pct}%</div>
+            <div style={{ fontSize: '13px', fontWeight: '700', color: t.accent, marginTop: '6px' }}>{t.label}</div>
+            <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px', lineHeight: 1.4 }}>{t.sub}</div>
+            {/* Mini bar */}
+            <div style={{ marginTop: '12px', height: '5px', borderRadius: '99px', background: 'rgba(255,255,255,.5)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${t.pct}%`, background: t.bar, borderRadius: '99px', transition: 'width 1s ease' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Per-Stage Breakdown ── */}
+      <div>
+        <h3 style={{ fontSize: '13px', fontWeight: '700', color: '#0F172A', marginBottom: '14px' }}>Breakdown per Stage</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {stageOrder.filter(s => stageBreakdown[s].total > 0).map(s => {
+            const sb  = stageBreakdown[s]
+            const tot = sb.total
+            const aP  = tot > 0 ? Math.round((sb.ahead   / tot) * 100) : 0
+            const oP  = tot > 0 ? Math.round((sb.ontrack / tot) * 100) : 0
+            const dP  = tot > 0 ? Math.round((sb.delay   / tot) * 100) : 0
+            const sc  = STAGE_COLORS_OTS[s] || '#94A3B8'
+            const dominantCat =
+              sb.delay > sb.ahead && sb.delay > sb.ontrack ? 'delay' :
+              sb.ahead > sb.ontrack ? 'ahead' : 'ontrack'
+            const catMeta = {
+              ahead:   { label: 'Lebih Cepat', color: '#1E40AF', bg: '#EFF6FF' },
+              ontrack: { label: 'On-Track',    color: '#166534', bg: '#F0FDF9' },
+              delay:   { label: 'Delay',        color: '#92400E', bg: '#FFFBEB' },
+            }
+            const dom = catMeta[dominantCat]
+
+            return (
+              <div key={s} style={{
+                display: 'grid', gridTemplateColumns: '120px 1fr 120px',
+                gap: '14px', alignItems: 'center',
+                padding: '10px 14px', borderRadius: '12px', background: '#FAFCFF',
+                border: '1px solid #F1F5F9',
+              }}>
+                {/* Stage label */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ background: sc, color: '#fff', borderRadius: '6px', padding: '2px 9px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{s}</span>
+                  <span style={{ fontSize: '10px', color: '#94A3B8' }}>{tot}</span>
+                </div>
+                {/* Stacked bar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div style={{ display: 'flex', height: '8px', borderRadius: '99px', overflow: 'hidden', background: '#F1F5F9', gap: '1px' }}>
+                    {aP > 0 && <div style={{ width: `${aP}%`, background: '#3B82F6' }} title={`Lebih Cepat: ${sb.ahead}`} />}
+                    {oP > 0 && <div style={{ width: `${oP}%`, background: '#16A34A' }} title={`On-Track: ${sb.ontrack}`} />}
+                    {dP > 0 && <div style={{ width: `${dP}%`, background: '#D97706' }} title={`Delay: ${sb.delay}`} />}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {sb.ahead   > 0 && <span style={{ fontSize: '10px', color: '#3B82F6', fontWeight: '600' }}>⚡{sb.ahead}</span>}
+                    {sb.ontrack > 0 && <span style={{ fontSize: '10px', color: '#16A34A', fontWeight: '600' }}>✓{sb.ontrack}</span>}
+                    {sb.delay   > 0 && <span style={{ fontSize: '10px', color: '#D97706', fontWeight: '600' }}>⚠{sb.delay}</span>}
+                    {sb.nodata  > 0 && <span style={{ fontSize: '10px', color: '#CBD5E1', fontWeight: '600' }}>○{sb.nodata}</span>}
+                  </div>
+                </div>
+                {/* Dominant status pill */}
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ background: dom.bg, color: dom.color, borderRadius: '99px', padding: '3px 10px', fontSize: '10px', fontWeight: '700' }}>
+                    {dominantCat === 'ahead' ? '⚡' : dominantCat === 'ontrack' ? '✓' : '⚠'} {dom.label}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Legend ── */}
+      <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #F1F5F9', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '600' }}>Keterangan:</span>
+        {[
+          { color: '#3B82F6', bg: '#EFF6FF', icon: '⚡', label: 'Lebih Cepat — selesai/berjalan lebih cepat dari plan' },
+          { color: '#166534', bg: '#F0FDF9', icon: '✓',  label: 'On-Track — dalam toleransi ±5 menit' },
+          { color: '#92400E', bg: '#FFFBEB', icon: '⚠',  label: 'Delay — melebihi batas waktu plan' },
+        ].map(l => (
+          <span key={l.label} style={{ background: l.bg, color: l.color, borderRadius: '6px', padding: '3px 10px', fontSize: '10px', fontWeight: '700' }}>
+            {l.icon} {l.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Plan vs Actual Chart ──────────────────────────────────────────────────────
 function PlanActualChart({ items = [] }) {
   const stageOrder = ['Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5']
@@ -1436,6 +1662,81 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
           ))}
         </div>
 
+        {/* ── TIME DELTA BANNER ── */}
+        {(() => {
+          const assessed = filteredItems.filter(r => {
+            const s = (r.Status || '').toLowerCase()
+            return s.includes('done') || s.includes('in progress')
+          })
+          if (assessed.length === 0) return null
+
+          let totalDeltaMs = 0
+          let counted = 0
+          let doneCount = 0
+          assessed.forEach(r => {
+            const pe = r['Planned End Time'] ? new Date(r['Planned End Time']) : null
+            const ae = r['Actual End Time']  ? new Date(r['Actual End Time'])  : null
+            const isDone   = (r.Status || '').toLowerCase().includes('done')
+            const isInProg = (r.Status || '').toLowerCase().includes('in progress')
+            const ref = isDone ? ae : isInProg ? new Date() : null
+            if (!pe || !ref || isNaN(pe) || isNaN(ref)) return
+            totalDeltaMs += ref.getTime() - pe.getTime()
+            counted++
+            if (isDone) doneCount++
+          })
+          if (counted === 0) return null
+
+          const absMs    = Math.abs(totalDeltaMs)
+          const totalMin = Math.round(absMs / 60000)
+          const hours    = Math.floor(totalMin / 60)
+          const mins     = totalMin % 60
+          const isAhead  = totalDeltaMs < 0
+          const isOnTrack = Math.abs(totalDeltaMs) < 5 * 60000
+
+          const fmt = hours > 0
+            ? `${hours} jam${mins > 0 ? ' ' + mins + ' menit' : ''}`.trim()
+            : `${mins} menit`
+
+          const cfg = isOnTrack
+            ? { bg: '#EFF6FF', border: '#BFDBFE', iconBg: '#3B82F6', label: 'ON-TRACK',    labelBg: '#DBEAFE', labelColor: '#1E40AF', title: 'Tepat waktu',        desc: `Dari total ${doneCount} aktivitas yang selesai, berjalan sesuai rencana`,                          valPrefix: '±0',          valueColor: '#1E3A8A' }
+            : isAhead
+            ? { bg: '#EFF6FF', border: '#BFDBFE', iconBg: '#3B82F6', label: 'LEBIH CEPAT', labelBg: '#DBEAFE', labelColor: '#1E40AF', title: `Lebih cepat ${fmt}`, desc: `Dari total ${doneCount} aktivitas yang selesai, actual lebih cepat ${fmt} dibanding planned`,         valPrefix: '–' + (hours > 0 ? `${hours}j${mins > 0 ? mins + 'm' : ''}` : `${mins}m`), valueColor: '#1E3A8A' }
+            : { bg: '#FFFBEB', border: '#FDE68A', iconBg: '#D97706', label: 'DELAY',        labelBg: '#FEF3C7', labelColor: '#92400E', title: `Delay ${fmt}`,       desc: `Dari total ${doneCount} aktivitas yang selesai, actual terlambat ${fmt} dari planned`,            valPrefix: '+' + (hours > 0 ? `${hours}j${mins > 0 ? mins + 'm' : ''}` : `${mins}m`), valueColor: '#92400E' }
+
+          return (
+            <div style={{
+              background: cfg.bg, border: `1.5px solid ${cfg.border}`,
+              borderRadius: '16px', padding: '18px 24px',
+              display: 'flex', alignItems: 'center', gap: '16px',
+              marginBottom: '24px', boxShadow: '0 1px 6px rgba(0,0,0,.04)',
+            }}>
+              <div style={{
+                width: '44px', height: '44px', borderRadius: '12px',
+                background: cfg.iconBg, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', flexShrink: 0,
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ background: cfg.labelBg, color: cfg.labelColor, borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: '800', letterSpacing: '.5px' }}>{cfg.label}</span>
+                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#0F172A' }}>{cfg.title}</span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#64748B' }}>{cfg.desc}</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: '#94A3B8', letterSpacing: '.5px', marginBottom: '4px' }}>SELISIH WAKTU</div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: cfg.valueColor, lineHeight: 1, fontFamily: 'monospace' }}>{cfg.valPrefix}</div>
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>{doneCount} aktivitas terhitung</div>
+              </div>
+            </div>
+          )
+        })()}
+
         {/* ── TODAY ACTIVITIES ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', border: '2px solid rgba(1,132,124,.15)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -1554,6 +1855,9 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
 
         {/* ── Plan vs Actual Chart ── */}
         {filteredItems.length > 0 && <PlanActualChart items={filteredItems} />}
+
+        {/* ── Overall Timing Summary (SEVP view) ── */}
+        {filteredItems.length > 0 && <OverallTimingSummary items={filteredItems} />}
 
         {/* ── ROW 4 + 5: Enhanced Detail Aktivitas ── */}
         <DetailAktivitas items={filteredItems} />
