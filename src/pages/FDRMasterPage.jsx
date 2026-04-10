@@ -338,7 +338,7 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
   })
 
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: `${size}px`, aspectRatio: '1/1' }}>
+    <div style={{ position: 'relative', width: `${size}px`, height: `${size}px`, margin: '0 auto' }}>
       <svg viewBox={`0 0 ${VB} ${VB}`} style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)', display: 'block' }}>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="22" />
         {paths}
@@ -1089,6 +1089,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
   const [fdrData,     setFdrData]     = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
+  const [filterStage, setFilterStage] = useState(null) // null = semua, 'Stage 0' ... 'Stage 5'
 
   const loadData = useCallback(async () => {
     try {
@@ -1118,7 +1119,10 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
   // ── Today Activities: derived dynamically from items based on today's date ──
   const todayActivities = React.useMemo(() => {
     const todayStr = new Date().toDateString()
-    return items
+    const sourceItems = filterStage
+      ? items.filter(r => (r.Stage || '').toLowerCase() === filterStage.toLowerCase())
+      : items
+    return sourceItems
       .filter(r => {
         const activity = (r.Activity || '').toString().trim()
         if (!activity) return false
@@ -1145,18 +1149,43 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         const tb = b.planned_start ? new Date(b.planned_start) : 0
         return ta - tb
       })
-  }, [items])
+  }, [items, filterStage])
 
-  const completedActs   = overall.done        || 0
-  const inProgressActs  = overall.in_progress || 0
-  const notStartedActs  = overall.not_started || 0
-  const totalActs       = overall.total       || 1
-  const completedPct    = overall.done_pct    || 0
-  const inProgressPct   = overall.in_progress_pct || 0
-  const notStartedPct   = overall.not_started_pct || 0
+  // ── Filter by stage ──────────────────────────────────────────────────────
+  const filteredItems = filterStage
+    ? items.filter(r => (r.Stage || '').toLowerCase() === filterStage.toLowerCase())
+    : items
+
+  const filteredStages = filterStage
+    ? stages.filter(s => (s.stage || '').toLowerCase() === filterStage.toLowerCase())
+    : stages
+
+  // Recompute overall from filtered items when a stage is selected
+  const computedOverall = (() => {
+    if (!filterStage || filteredItems.length === 0) return overall
+    const total      = filteredItems.length
+    const done       = filteredItems.filter(r => (r.Status || '').toLowerCase().includes('done')).length
+    const inProgress = filteredItems.filter(r => (r.Status || '').toLowerCase().includes('in progress')).length
+    const notStarted = total - done - inProgress
+    return {
+      total, done, in_progress: inProgress, not_started: notStarted,
+      done_pct:         total ? (done / total) * 100 : 0,
+      in_progress_pct:  total ? (inProgress / total) * 100 : 0,
+      not_started_pct:  total ? (notStarted / total) * 100 : 0,
+      progress_pct:     total ? (done / total) * 100 : 0,
+    }
+  })()
+
+  const completedActs   = computedOverall.done        || 0
+  const inProgressActs  = computedOverall.in_progress || 0
+  const notStartedActs  = computedOverall.not_started || 0
+  const totalActs       = computedOverall.total       || 1
+  const completedPct    = computedOverall.done_pct    || 0
+  const inProgressPct   = computedOverall.in_progress_pct || 0
+  const notStartedPct   = computedOverall.not_started_pct || 0
 
   // META derived from API
-  const overallPct = overall.progress_pct ?? completedPct
+  const overallPct = computedOverall.progress_pct ?? completedPct
   const overallStatus = completedPct === 100 ? 'SELESAI' : inProgressPct > 0 ? 'ON PROGRESS' : 'BELUM MULAI'
 
   if (loading && !fdrData) return (
@@ -1288,7 +1317,27 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
       </div>
 
       {/* ── MAIN BODY ── */}
-      <main style={{ padding: 'clamp(14px,2.5vw,28px) clamp(14px,2.5vw,32px)', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+      <main style={{ padding: 'clamp(14px,2.5vw,28px) clamp(14px,2.5vw,40px)', flex: 1, width: '100%' }}>
+
+        {/* ── Stage filter pills ── */}
+        <div className="stage-pills" style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          {[null, 'Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5'].map(s => (
+            <button
+              key={s}
+              onClick={() => setFilterStage(s)}
+              style={{
+                padding: '8px 20px', borderRadius: '99px', border: 'none',
+                fontWeight: '700', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+                background: filterStage === s ? '#01847C' : '#fff',
+                color: filterStage === s ? '#fff' : '#64748B',
+                boxShadow: filterStage === s ? '0 2px 8px rgba(1,132,124,.35)' : '0 1px 4px rgba(0,0,0,.08)',
+                transition: 'all .2s',
+              }}
+            >
+              {s === null ? 'Semua Stage' : s}
+            </button>
+          ))}
+        </div>
 
         {/* ── UPLOAD PANEL — admin only, hidden from presenter/Bank Syariah Indonesia ── */}
         {!readOnly && (
@@ -1298,18 +1347,18 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         )}
 
         {/* ── ROW 1: Donut card + 3 Summary Cards ── */}
-        <div className="fdr-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,220px) 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        <div className="fdr-kpi-grid" style={{ display: 'grid', gap: '20px', marginBottom: '24px' }}>
 
           {/* Donut card */}
           <div style={{
-            background: '#fff', borderRadius: '20px', padding: '28px 24px',
+            background: '#fff', borderRadius: '20px', padding: 'clamp(20px,3vw,36px) clamp(16px,2.5vw,28px)',
             boxShadow: '0 1px 8px rgba(0,0,0,.06)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0',
           }}>
-            <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A', alignSelf: 'flex-start', marginBottom: '16px' }}>
+            <div style={{ fontWeight: '700', fontSize: 'clamp(13px,1.2vw,16px)', color: '#0F172A', alignSelf: 'flex-start', marginBottom: '16px' }}>
               Upgrade Progress
             </div>
-            <OverallDonut completed={completedPct} inProgress={inProgressPct} notStarted={notStartedPct} size={160} />
+            <OverallDonut completed={completedPct} inProgress={inProgressPct} notStarted={notStartedPct} size={200} />
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '16px' }}>
               {[
                 { label: 'Completed',   pct: completedPct,   count: completedActs,  color: '#01847C' },
@@ -1357,15 +1406,15 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
             },
           ].map(k => (
             <div key={k.label} style={{
-              background: '#fff', borderRadius: '20px', padding: '28px',
+              background: '#fff', borderRadius: '20px', padding: 'clamp(20px,2.5vw,36px)',
               boxShadow: '0 1px 8px rgba(0,0,0,.06)', position: 'relative', overflow: 'hidden',
               display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
             }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: k.color }} />
               <div>
-                <p style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.6px' }}>{k.label}</p>
-                <p style={{ fontSize: '48px', fontWeight: '800', color: '#0F172A', lineHeight: 1 }}>{k.value}</p>
-                <p style={{ fontSize: '22px', fontWeight: '700', color: k.color, marginTop: '6px', lineHeight: 1 }}>{k.sub}</p>
+                <p style={{ fontSize: '12px', color: '#94A3B8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.6px' }}>{k.label}</p>
+                <p style={{ fontSize: 'clamp(36px,4vw,56px)', fontWeight: '800', color: '#0F172A', lineHeight: 1 }}>{k.value}</p>
+                <p style={{ fontSize: 'clamp(18px,2vw,26px)', fontWeight: '700', color: k.color, marginTop: '6px', lineHeight: 1 }}>{k.sub}</p>
                 <p style={{ fontSize: '13px', color: '#94A3B8', marginTop: '4px' }}>{k.tasks}</p>
               </div>
               <div style={{ marginTop: '24px' }}>
@@ -1416,7 +1465,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
               <div style={{ padding: '40px', textAlign: 'center', color: '#94A3B8' }}>Memuat data...</div>
             ) : error ? (
               <div style={{ padding: '20px', color: '#DC2626', fontSize: '13px' }}>⚠ {error}</div>
-            ) : stages.map((s, i) => {
+            ) : filteredStages.map((s, i) => {
               const cPct = s.progress_pct    || s.done_pct        || 0  // Progress column
               const iPct = s.in_progress_pct || 0
               const nPct = Math.max(0, 100 - cPct - iPct)
@@ -1435,7 +1484,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
               return (
                 <div key={i} style={{
                   padding: '18px 0',
-                  borderBottom: i < stages.length - 1 ? '1px solid #F1F5F9' : 'none',
+                  borderBottom: i < filteredStages.length - 1 ? '1px solid #F1F5F9' : 'none',
                 }}>
                   <div className="fdr-stage-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px' }}>
@@ -1494,10 +1543,10 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         </div>
 
         {/* ── Plan vs Actual Chart ── */}
-        {items.length > 0 && <PlanActualChart items={items} />}
+        {filteredItems.length > 0 && <PlanActualChart items={filteredItems} />}
 
         {/* ── ROW 4 + 5: Enhanced Detail Aktivitas ── */}
-        <DetailAktivitas items={items} />
+        <DetailAktivitas items={filteredItems} />
 
       </main>
 
@@ -1510,8 +1559,8 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* ── FDR KPI grid ── */
-        .fdr-kpi-grid { grid-template-columns: minmax(180px,220px) 1fr 1fr 1fr; }
+        /* ── FDR KPI grid — full width, no max-width cap ── */
+        .fdr-kpi-grid { grid-template-columns: minmax(220px,280px) 1fr 1fr 1fr; }
         @media (max-width: 1024px) {
           .fdr-kpi-grid { grid-template-columns: 1fr 1fr !important; }
           .fdr-kpi-grid > div:first-child { grid-column: 1 / -1; flex-direction: row !important; align-items: flex-start !important; gap: 20px; }
@@ -1526,6 +1575,12 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
           .fdr-nav-hide { display: none !important; }
         }
 
+        /* ── Stage filter pills ── */
+        .stage-pills button { font-size: 13px; }
+        @media (max-width: 480px) {
+          .stage-pills button { font-size: 11px !important; padding: 5px 12px !important; }
+        }
+
         /* ── Progress per stage row: stack on mobile ── */
         @media (max-width: 640px) {
           .fdr-stage-row { flex-direction: column !important; gap: 8px !important; }
@@ -1535,6 +1590,11 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         /* ── Plan vs Actual: shrink label col ── */
         @media (max-width: 640px) {
           .fdr-plan-row { grid-template-columns: 80px 1fr auto !important; gap: 8px !important; }
+        }
+
+        /* ── TV / very wide screens: boost KPI grid donut column ── */
+        @media (min-width: 1600px) {
+          .fdr-kpi-grid { grid-template-columns: minmax(260px,320px) 1fr 1fr 1fr; gap: 28px; }
         }
       `}</style>
     </div>
