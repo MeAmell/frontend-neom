@@ -36,21 +36,21 @@ export default function LoginPage({ onLogin }) {
       <div style={{ position: 'absolute', bottom: '-100px', left: '-60px', width: '380px', height: '380px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(109,181,185,.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', inset: 0, opacity: .06, backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
-      {/* Left panel */}
-      <div style={{ flex: '0 0 55%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '80px', position: 'relative', zIndex: 1 }}>
+      {/* Left panel — hidden on mobile */}
+      <div className="login-left" style={{ flex: '0 0 55%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 'clamp(32px,6vw,80px)', position: 'relative', zIndex: 1 }}>
         <div style={{ marginBottom: '48px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '14px', background: 'rgba(255,255,255,.1)', borderRadius: '16px', padding: '12px 20px', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,.15)', marginBottom: '40px' }}>
             <img src={bsiLogo} alt="BSI" style={{ width: '40px', height: '40px', borderRadius: '10px', objectFit: 'contain', background: '#fff', padding: '4px' }} />
             <span style={{ color: 'rgba(255,255,255,.9)', fontWeight: '600', fontSize: '15px' }}>Bank Syariah Indonesia</span>
           </div>
-          <h1 style={{ fontSize: '52px', fontWeight: '800', lineHeight: '1.1', color: '#fff', marginBottom: '20px', letterSpacing: '-1.5px' }}>
+          <h1 style={{ fontSize: 'clamp(32px,4vw,52px)', fontWeight: '800', lineHeight: '1.1', color: '#fff', marginBottom: '20px', letterSpacing: '-1.5px' }}>
             NEOM<br /><span style={{ color: '#E8A030' }}>Core Banking</span><br />Upgrade
           </h1>
           <p style={{ color: 'rgba(255,255,255,.65)', fontSize: '18px', lineHeight: '1.7', maxWidth: '400px' }}>
-            Dashboard pemantauan progress upgrade sistem core banking BSI secara real-time .
+            Dashboard pemantauan progress upgrade sistem core banking BSI secara real-time.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '24px' }}>
+        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
           {[{ label: 'Total Tasks', value: '1,400' }, { label: 'Total Stage', value: '6' }, { label: 'Update', value: 'Real-time' }].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,.08)', borderRadius: '14px', padding: '20px 24px', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,.12)' }}>
               <div style={{ fontSize: '26px', fontWeight: '800', color: '#fff', lineHeight: 1 }}>{s.value}</div>
@@ -61,8 +61,8 @@ export default function LoginPage({ onLogin }) {
       </div>
 
       {/* Right login card */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', position: 'relative', zIndex: 1 }}>
-        <div style={{ width: '100%', maxWidth: '440px', background: 'rgba(255,255,255,.97)', borderRadius: '28px', padding: '48px', boxShadow: '0 32px 80px rgba(0,0,0,.3)' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'clamp(16px,4vw,40px)', position: 'relative', zIndex: 1 }}>
+        <div style={{ width: '100%', maxWidth: '440px', background: 'rgba(255,255,255,.97)', borderRadius: '28px', padding: 'clamp(24px,5vw,48px)', boxShadow: '0 32px 80px rgba(0,0,0,.3)' }}>
           <div style={{ textAlign: 'center', marginBottom: '36px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <img src={bsiLogo} alt="BSI" style={{ width: '40px', height: '40px', borderRadius: '10px', objectFit: 'contain', background: '#fff', padding: '4px' }} />
@@ -75,14 +75,14 @@ export default function LoginPage({ onLogin }) {
             <div>
               <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>Username</label>
               <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Masukkan username" required
-                style={{ width: '100%', padding: '13px 16px', border: '1.5px solid #E2E8F0', borderRadius: '12px', fontSize: '15px', outline: 'none', fontFamily: 'inherit', background: '#F8FAFC' }}
+                style={{ width: '100%', padding: '13px 16px', border: '1.5px solid #E2E8F0', borderRadius: '12px', fontSize: '15px', outline: 'none', fontFamily: 'inherit', background: '#F8FAFC', boxSizing: 'border-box' }}
                 onFocus={e => e.target.style.borderColor = '#01847C'} onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
             </div>
             <div>
               <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '8px' }}>Password</label>
               <div style={{ position: 'relative' }}>
                 <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Masukkan password" required
-                  style={{ width: '100%', padding: '13px 48px 13px 16px', border: '1.5px solid #E2E8F0', borderRadius: '12px', fontSize: '15px', outline: 'none', fontFamily: 'inherit', background: '#F8FAFC' }}
+                  style={{ width: '100%', padding: '13px 48px 13px 16px', border: '1.5px solid #E2E8F0', borderRadius: '12px', fontSize: '15px', outline: 'none', fontFamily: 'inherit', background: '#F8FAFC', boxSizing: 'border-box' }}
                   onFocus={e => e.target.style.borderColor = '#01847C'} onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
                 <button type="button" onClick={() => setShowPass(v => !v)}
                   style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '18px' }}>
@@ -106,6 +106,18 @@ export default function LoginPage({ onLogin }) {
           <p style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: '#94A3B8' }}>© 2026 Bank Syariah Indonesia · Confidential</p>
         </div>
       </div>
+
+      <style>{`
+        * { box-sizing: border-box; }
+        /* On mobile: hide left panel, card takes full width */
+        @media (max-width: 768px) {
+          .login-left { display: none !important; }
+        }
+        /* On TV / very wide: cap left panel, keep proportions */
+        @media (min-width: 1600px) {
+          .login-left { flex: 0 0 50% !important; }
+        }
+      `}</style>
     </div>
   )
 }

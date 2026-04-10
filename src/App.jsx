@@ -9,6 +9,7 @@ import bsiLogo from './assets/bsi_logo.png'
 export default function App() {
   const { user, loading, login, logout } = useAuth()
   const [activePage, setActivePage] = useState('ojk')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   if (loading) return (
     <div style={{
@@ -23,53 +24,47 @@ export default function App() {
 
   const role = user.role
 
-  // ── OJK viewer: dashboard only ─────────────────────────────────────────────
-  if (role === 'viewer') {
-    return <DashboardPage user={user} onLogout={logout} />
-  }
+  if (role === 'viewer') return <DashboardPage user={user} onLogout={logout} />
+  if (role === 'branch') return <BranchTestingPage user={user} onLogout={logout} />
+  if (role === 'presenter') return <FDRMasterPage user={user} onLogout={logout} readOnly={true} />
 
-  // ── Branch tester: branch testing only ────────────────────────────────────
-  if (role === 'branch') {
-    return <BranchTestingPage user={user} onLogout={logout} />
-  }
-
-  // ── Presenter / Direksi: FDR Master read-only, no upload ──────────────────
-  if (role === 'presenter') {
-    return (
-      <FDRMasterPage
-        user={user}
-        onLogout={logout}
-        readOnly={true}
-      />
-    )
-  }
-
-  // ── Admin: full sidebar with all pages ────────────────────────────────────
   if (role === 'admin') {
     return (
       <div style={{ display: 'flex', minHeight: '100vh' }}>
 
+        {/* ── Mobile overlay backdrop ── */}
+        {sidebarOpen && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)',
+              zIndex: 199, display: 'none',
+            }}
+            className="sidebar-backdrop"
+          />
+        )}
+
         {/* ── Sidebar ── */}
-        <aside style={{
-          width: '200px',
-          background: '#fff',
-          borderRight: '1px solid #E2E8F0',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '20px 0',
-          flexShrink: 0,
-          position: 'fixed',
-          top: 0, left: 0, bottom: 0,
-          zIndex: 200,
-          boxShadow: '2px 0 8px rgba(0,0,0,.04)',
-        }}>
+        <aside
+          className={`app-sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}
+          style={{
+            width: '200px',
+            background: '#fff',
+            borderRight: '1px solid #E2E8F0',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '20px 0',
+            flexShrink: 0,
+            position: 'fixed',
+            top: 0, left: 0, bottom: 0,
+            zIndex: 200,
+            boxShadow: '2px 0 8px rgba(0,0,0,.04)',
+            transition: 'transform .25s ease',
+          }}
+        >
           {/* Logo */}
           <div style={{ padding: '0 20px 20px', borderBottom: '1px solid #F1F5F9' }}>
-            <img
-              src={bsiLogo}
-              alt="BSI Logo"
-              style={{ height: '36px', objectFit: 'contain', marginBottom: '10px', display: 'block' }}
-            />
+            <img src={bsiLogo} alt="BSI Logo" style={{ height: '36px', objectFit: 'contain', marginBottom: '10px', display: 'block' }} />
             <div style={{ fontSize: '12px', fontWeight: '700', color: '#0F172A', lineHeight: 1.2 }}>NEOM Dashboard</div>
             <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>Admin Panel</div>
           </div>
@@ -77,13 +72,13 @@ export default function App() {
           {/* Nav items */}
           <nav style={{ flex: 1, padding: '12px 10px' }}>
             {[
-              { key: 'ojk',    label: 'OJK Dashboard',       desc: 'Progress upgrade'             },
-              { key: 'branch', label: 'Branch Testing',       desc: 'EXA & T24 Browser'            },
-              { key: 'fdr',    label: 'Dashboard Master FDR', desc: 'FDR Overview & Activities'    },
+              { key: 'ojk',    label: 'Dashboard NEOM',       desc: 'Progress upgrade'          },
+              { key: 'branch', label: 'Branch Testing',       desc: 'EXA & T24 Browser'         },
+              { key: 'fdr',    label: 'Dashboard Master FDR', desc: 'FDR Overview & Activities' },
             ].map(item => (
               <button
                 key={item.key}
-                onClick={() => setActivePage(item.key)}
+                onClick={() => { setActivePage(item.key); setSidebarOpen(false) }}
                 style={{
                   width: '100%', textAlign: 'left', padding: '10px 12px',
                   borderRadius: '10px', border: 'none', cursor: 'pointer',
@@ -94,10 +89,7 @@ export default function App() {
                 onMouseEnter={e => { if (activePage !== item.key) e.currentTarget.style.background = '#F8FAFC' }}
                 onMouseLeave={e => { if (activePage !== item.key) e.currentTarget.style.background = 'transparent' }}
               >
-                <div style={{
-                  fontSize: '12px', fontWeight: '600', lineHeight: 1.2,
-                  color: activePage === item.key ? '#01847C' : '#0F172A',
-                }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', lineHeight: 1.2, color: activePage === item.key ? '#01847C' : '#0F172A' }}>
                   {item.label}
                 </div>
                 <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>{item.desc}</div>
@@ -111,12 +103,7 @@ export default function App() {
             <div style={{ fontSize: '10px', color: '#94A3B8', marginBottom: '10px' }}>Admin BSI</div>
             <button
               onClick={logout}
-              style={{
-                width: '100%', padding: '7px', border: '1.5px solid #FCA5A5',
-                borderRadius: '8px', background: '#FFF1F1', color: '#DC2626',
-                fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit',
-                transition: 'all .15s',
-              }}
+              style={{ width: '100%', padding: '7px', border: '1.5px solid #FCA5A5', borderRadius: '8px', background: '#FFF1F1', color: '#DC2626', fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}
               onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.color = '#fff' }}
               onMouseLeave={e => { e.currentTarget.style.background = '#FFF1F1'; e.currentTarget.style.color = '#DC2626' }}
             >
@@ -125,8 +112,26 @@ export default function App() {
           </div>
         </aside>
 
+        {/* ── Mobile hamburger button ── */}
+        <button
+          className="sidebar-hamburger"
+          onClick={() => setSidebarOpen(v => !v)}
+          style={{
+            position: 'fixed', top: '14px', left: '14px',
+            zIndex: 300, background: '#01847C', color: '#fff',
+            border: 'none', borderRadius: '10px',
+            width: '38px', height: '38px',
+            display: 'none', /* shown via CSS */
+            alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: '18px',
+            boxShadow: '0 2px 8px rgba(1,132,124,.4)',
+          }}
+        >
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
+
         {/* Main content */}
-        <div style={{ marginLeft: '200px', flex: 1, minWidth: 0 }}>
+        <div className="app-main-content" style={{ marginLeft: '200px', flex: 1, minWidth: 0 }}>
           {activePage === 'ojk'
             ? <DashboardPage    user={user} onLogout={logout} hideSidebar />
             : activePage === 'branch'
@@ -134,10 +139,19 @@ export default function App() {
             : <FDRMasterPage    user={user} onLogout={logout} hideSidebar />
           }
         </div>
+
+        <style>{`
+          @media (max-width: 768px) {
+            .app-sidebar { transform: translateX(-100%); }
+            .app-sidebar.sidebar-open { transform: translateX(0); }
+            .sidebar-backdrop { display: block !important; }
+            .sidebar-hamburger { display: flex !important; }
+            .app-main-content { margin-left: 0 !important; }
+          }
+        `}</style>
       </div>
     )
   }
 
-  // Fallback — unknown role → login
   return <LoginPage onLogin={login} />
 }

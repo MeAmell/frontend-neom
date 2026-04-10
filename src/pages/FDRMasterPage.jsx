@@ -307,10 +307,10 @@ function CompletedTable({ rows }) {
 
 // ── SVG Donut Chart (inline, no external dep) ────────────────────────────────
 function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
-  const r = 64, cx = size / 2, cy = size / 2
+  const VB = 200
+  const r = 80, cx = VB / 2, cy = VB / 2
   const circ = 2 * Math.PI * r
 
-  // Build segments from percentages
   const segments = [
     { pct: completed,   color: '#01847C' },
     { pct: inProgress,  color: '#E8A030' },
@@ -326,7 +326,7 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
         cx={cx} cy={cy} r={r}
         fill="none"
         stroke={seg.color}
-        strokeWidth="18"
+        strokeWidth="22"
         strokeDasharray={`${len} ${circ - len}`}
         strokeDashoffset={-offset}
         strokeLinecap="butt"
@@ -338,25 +338,131 @@ function OverallDonut({ completed, inProgress, notStarted, size = 180 }) {
   })
 
   return (
-    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="18" />
+    <div style={{ position: 'relative', width: '100%', maxWidth: `${size}px`, aspectRatio: '1/1' }}>
+      <svg viewBox={`0 0 ${VB} ${VB}`} style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)', display: 'block' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="22" />
         {paths}
       </svg>
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: '28px', fontWeight: '900', color: '#01847C', lineHeight: 1 }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 'clamp(16px,8%,28px)', fontWeight: '900', color: '#01847C', lineHeight: 1 }}>
           {completed.toFixed(1)}%
         </span>
-        <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '500', marginTop: '2px' }}>Completed</span>
+        <span style={{ fontSize: 'clamp(9px,4%,11px)', color: '#94A3B8', fontWeight: '500', marginTop: '2px' }}>Completed</span>
       </div>
     </div>
   )
 }
 
 
+
+// ── Plan vs Actual Chart ──────────────────────────────────────────────────────
+function PlanActualChart({ items = [] }) {
+  const stageOrder = ['Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5']
+  const STAGE_COLORS_LOCAL = {
+    'Stage 0': '#6366F1', 'Stage 1': '#0EA5E9', 'Stage 2': '#01847C',
+    'Stage 3': '#8B5CF6', 'Stage 4': '#E8A030', 'Stage 5': '#94A3B8',
+  }
+
+  const agg = {}
+  stageOrder.forEach(s => { agg[s] = { stage: s, planned: 0, actual: 0, done: 0, total: 0 } })
+
+  items.forEach(r => {
+    const s = r.Stage || ''
+    if (!agg[s]) return
+    agg[s].total++
+    const status = (r.Status || '').toLowerCase()
+    if (status === 'done' || status.includes('done')) {
+      agg[s].done++
+      const pd = parseFloat(r['Planned Duration']) || 0
+      const ad = parseFloat(r['Actual Duration'])  || 0
+      if (pd > 0) agg[s].planned += pd
+      if (ad > 0) agg[s].actual  += ad
+    }
+  })
+
+  const rows = stageOrder.map(s => agg[s]).filter(r => r.total > 0)
+  if (!rows.length) return null
+
+  const maxVal = Math.max(...rows.map(r => Math.max(r.planned, r.actual)), 1)
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Plan vs Actual Duration</h2>
+          <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Perbandingan durasi rencana vs aktual per stage (aktivitas Done)</p>
+        </div>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          {[{ color: '#CBD5E1', dash: true, label: 'Planned' }, { color: '#01847C', dash: false, label: 'Actual' }].map(l => (
+            <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '28px', height: '4px', background: l.dash ? `repeating-linear-gradient(90deg,${l.color} 0 6px,transparent 6px 10px)` : l.color, borderRadius: '2px' }} />
+              <span style={{ fontSize: '11px', color: '#64748B' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {rows.map((r, i) => {
+          const planPct   = (r.planned / maxVal) * 100
+          const actualPct = (r.actual  / maxVal) * 100
+          const donePct   = r.total > 0 ? Math.round((r.done / r.total) * 100) : 0
+          const sc        = STAGE_COLORS_LOCAL[r.stage] || '#94A3B8'
+          const delta     = r.planned > 0 ? ((r.actual - r.planned) / r.planned) * 100 : 0
+          const isAhead   = r.done > 0 && delta < -5
+          const isDelay   = r.done > 0 && delta > 10
+          const noData    = r.done === 0
+
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr auto', gap: '14px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <span style={{ background: sc, color: '#fff', borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{r.stage}</span>
+                <span style={{ fontSize: '10px', color: '#94A3B8' }}>{donePct}%</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'right', fontSize: '9px', color: '#94A3B8', fontWeight: '600' }}>PLAN</div>
+                  <div style={{ flex: 1, height: '10px', background: '#F1F5F9', borderRadius: '99px', overflow: 'hidden' }}>
+                    {planPct > 0 && <div style={{ width: `${planPct}%`, height: '100%', background: '#CBD5E1', borderRadius: '99px', transition: 'width .8s' }} />}
+                  </div>
+                  <div style={{ width: '50px', flexShrink: 0, fontSize: '10px', color: '#94A3B8', fontFamily: 'monospace' }}>{r.planned > 0 ? `${Math.round(r.planned/60)}h` : '—'}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'right', fontSize: '9px', color: '#01847C', fontWeight: '700' }}>ACT</div>
+                  <div style={{ flex: 1, height: '10px', background: '#F1F5F9', borderRadius: '99px', overflow: 'hidden' }}>
+                    {actualPct > 0 && <div style={{ width: `${actualPct}%`, height: '100%', background: sc, borderRadius: '99px', transition: 'width .8s' }} />}
+                  </div>
+                  <div style={{ width: '50px', flexShrink: 0, fontSize: '10px', color: '#0F172A', fontFamily: 'monospace', fontWeight: '600' }}>{r.actual > 0 ? `${Math.round(r.actual/60)}h` : '—'}</div>
+                </div>
+              </div>
+              <div style={{ minWidth: '100px', textAlign: 'right' }}>
+                {noData ? (
+                  <span style={{ fontSize: '10px', color: '#94A3B8' }}>—</span>
+                ) : isAhead ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DBEAFE', color: '#1E40AF', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>⚡ Lebih cepat {Math.abs(delta).toFixed(0)}%</span>
+                ) : isDelay ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#FEF3C7', color: '#92400E', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>⚠ Delay {delta.toFixed(0)}%</span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DCFCE7', color: '#166534', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>✓ On-track</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #F1F5F9', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+        {[
+          { bg: '#DBEAFE', color: '#1E40AF', icon: '⚡', label: 'Lebih cepat dari plan' },
+          { bg: '#DCFCE7', color: '#166534', icon: '✓',  label: 'On-track (±10%)' },
+          { bg: '#FEF3C7', color: '#92400E', icon: '⚠',  label: 'Delay >10% dari plan' },
+        ].map(l => (
+          <span key={l.label} style={{ background: l.bg, color: l.color, borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: '700' }}>{l.icon} {l.label}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ── Helpers: parse datetime string ─────────────────────────────────────────────
 function parseDate(str) {
@@ -783,15 +889,14 @@ function DetailAktivitas({ items = [] }) {
       {/* ── Status legend bar ── */}
       <div style={{
         display: 'flex', gap: '16px', padding: '10px 28px',
-        background: '#FAFCFF', borderBottom: '1px solid #F1F5F9', flexWrap: 'wrap',
+        background: '#FAFCFF', borderBottom: '1px solid #F1F5F9', flexWrap: 'wrap', alignItems: 'center',
       }}>
         {[
-          { label: 'Done / On-track', dot: '#16A34A', bg: '#DCFCE7' },
-          { label: 'On-track (Ahead)', dot: '#3B82F6', bg: '#DBEAFE' },
-          { label: 'Delayed', dot: '#D97706', bg: '#FEF3C7' },
+          { label: 'Done',        dot: '#16A34A', bg: '#DCFCE7' },
           { label: 'In Progress', dot: '#F59E0B', bg: '#FEF9C3' },
           { label: 'Not Started', dot: '#DC2626', bg: '#FEE2E2' },
-          { label: 'N/A', dot: '#94A3B8', bg: '#F1F5F9' },
+          { label: 'Delayed',     dot: '#D97706', bg: '#FEF3C7' },
+          { label: 'N/A',         dot: '#94A3B8', bg: '#F1F5F9' },
         ].map(l => (
           <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: l.dot }} />
@@ -799,7 +904,8 @@ function DetailAktivitas({ items = [] }) {
           </div>
         ))}
         <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#94A3B8' }}>
-          Delta: <span style={{ color: '#DCFCE7', fontWeight: '600', background: '#166534', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>✓ On-track</span>
+          Delta:{' '}
+          <span style={{ color: '#166534', fontWeight: '600', background: '#DCFCE7', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>✓ On-track</span>
           {' '}<span style={{ color: '#1E40AF', fontWeight: '600', background: '#DBEAFE', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>⚡ Ahead</span>
           {' '}<span style={{ color: '#92400E', fontWeight: '600', background: '#FEF3C7', padding: '1px 5px', borderRadius: '4px', fontSize: '10px' }}>⚠ Delay</span>
         </span>
@@ -814,7 +920,7 @@ function DetailAktivitas({ items = [] }) {
         </div>
       ) : view === 'detail' ? (
         /* ─ DETAIL VIEW: Card grid ─ */
-        <div style={{ padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))', gap: '14px' }}>
+        <div style={{ padding: '20px clamp(12px,2vw,28px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(480px,100%), 1fr))', gap: '14px' }}>
           {filtered.map((act, i) => <ActivityCard key={i} act={act} index={i} />)}
         </div>
       ) : (
@@ -822,16 +928,16 @@ function DetailAktivitas({ items = [] }) {
         <div>
           {/* Table header */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '90px 1fr 130px 140px',
-            gap: '12px', padding: '10px 16px',
-            background: '#0F172A', margin: '16px 28px 0',
+            display: 'grid', gridTemplateColumns: '80px 1fr 120px 120px',
+            gap: '8px', padding: '10px 12px',
+            background: '#0F172A', margin: '16px clamp(12px,2vw,28px) 0',
             borderRadius: '10px 10px 0 0',
           }}>
             {['Stage', 'Aktivitas', 'Status', 'Tgl Plan'].map(h => (
               <span key={h} style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,.6)', textTransform: 'uppercase', letterSpacing: '.5px' }}>{h}</span>
             ))}
           </div>
-          <div style={{ margin: '0 28px 20px', border: '1px solid #F1F5F9', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
+          <div style={{ margin: '0 clamp(12px,2vw,28px) 20px', border: '1px solid #F1F5F9', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
             {filtered.map((act, i) => <ActivityRow key={i} act={act} index={i} />)}
           </div>
         </div>
@@ -858,7 +964,7 @@ function TodayActivitiesFDR({ activities = [] }) {
     'Stage 3': '#8B5CF6', 'Stage 4': '#E8A030', 'Stage 5': '#94A3B8',
   }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '10px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(440px,100%), 1fr))', gap: '10px' }}>
       {activities.map((a, i) => {
         const sc = statusMap[a.status] || statusMap['Not Started']
         const stageColor = stageColors[a.stage] || '#64748B'
@@ -1067,10 +1173,11 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
       {/* ── TOP NAV ── */}
       <nav style={{
         background: '#fff', borderBottom: '1px solid #E2E8F0',
-        padding: '0 32px', height: '64px',
+        padding: '0 clamp(12px,3vw,32px)', minHeight: '64px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0, zIndex: 100,
-        boxShadow: '0 1px 8px rgba(0,0,0,.06)',
+        boxShadow: '0 1px 8px rgba(0,0,0,.06)', flexWrap: 'wrap', gap: '8px',
+        boxSizing: 'border-box',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
@@ -1083,25 +1190,21 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
             <div style={{ fontSize: '11px', color: '#64748B' }}>Full Dress Rehearsal · NEOM Core Banking</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '8px', height: '8px', background: '#16A34A', borderRadius: '50%', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
             <span style={{ fontSize: '12px', color: '#16A34A', fontWeight: '600' }}>Live</span>
           </div>
-          <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <span className="fdr-nav-hide" style={{ fontSize: '12px', color: '#94A3B8' }}>
             Update: {lastRefresh.toLocaleTimeString('id-ID')}
           </span>
           {user && (
-            <div style={{
+            <div className="fdr-nav-hide" style={{
               display: 'flex', alignItems: 'center', gap: '8px',
               background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px',
               border: '1px solid #E2E8F0',
             }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '8px',
-                background: '#01847C', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '11px',
-              }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#01847C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '11px' }}>
                 {user?.name?.[0] || 'U'}
               </div>
               <div>
@@ -1113,12 +1216,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
           {onLogout && (
             <button
               onClick={() => { sessionStorage.removeItem('neom_token'); onLogout() }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '8px 16px', border: '1.5px solid #FCA5A5', borderRadius: '10px',
-                background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '13px',
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', border: '1.5px solid #FCA5A5', borderRadius: '10px', background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
               onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.color = '#fff' }}
               onMouseLeave={e => { e.currentTarget.style.background = '#FFF1F1'; e.currentTarget.style.color = '#DC2626' }}
             >
@@ -1127,7 +1225,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
                 <polyline points="16 17 21 12 16 7"/>
                 <line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
-              Keluar
+              <span className="fdr-nav-hide">Keluar</span>
             </button>
           )}
         </div>
@@ -1136,7 +1234,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
       {/* ── HEADER BANNER ── */}
       <div style={{
         background: 'linear-gradient(135deg, #01847C 0%, #016860 50%, #0F172A 100%)',
-        padding: '28px 32px', position: 'relative', overflow: 'hidden',
+        padding: 'clamp(16px,3vw,28px) clamp(14px,3vw,32px)', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{
           position: 'absolute', inset: 0, opacity: .05,
@@ -1166,7 +1264,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
                 FDR 3 - April 2026
               </span>
             </div>
-            <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>
+            <h1 style={{ color: '#fff', fontSize: 'clamp(18px,3vw,28px)', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>
               Dashboard Master FDR
             </h1>
             <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '13px', marginTop: '6px' }}>
@@ -1190,9 +1288,9 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
       </div>
 
       {/* ── MAIN BODY ── */}
-      <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+      <main style={{ padding: 'clamp(14px,2.5vw,28px) clamp(14px,2.5vw,32px)', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
-        {/* ── UPLOAD PANEL — admin only, hidden from presenter/OJK view ── */}
+        {/* ── UPLOAD PANEL — admin only, hidden from presenter/Bank Syariah Indonesia ── */}
         {!readOnly && (
           <div style={{ marginBottom: '20px' }}>
             <UploadFDRPanel onSuccess={loadData} />
@@ -1200,13 +1298,13 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
         )}
 
         {/* ── ROW 1: Donut card + 3 Summary Cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        <div className="fdr-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,220px) 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
 
-          {/* Donut card — "Upgrade Progress" style */}
+          {/* Donut card */}
           <div style={{
             background: '#fff', borderRadius: '20px', padding: '28px 24px',
             boxShadow: '0 1px 8px rgba(0,0,0,.06)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0', minWidth: '220px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0',
           }}>
             <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A', alignSelf: 'flex-start', marginBottom: '16px' }}>
               Upgrade Progress
@@ -1339,7 +1437,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
                   padding: '18px 0',
                   borderBottom: i < stages.length - 1 ? '1px solid #F1F5F9' : 'none',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
+                  <div className="fdr-stage-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '160px' }}>
                       <div style={{
                         background: statusColor, color: '#fff',
@@ -1375,7 +1473,7 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
                       {(s.progress_pct || cPct).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '20px', paddingLeft: '174px' }}>
+                  <div style={{ display: 'flex', gap: '20px', paddingLeft: 'clamp(0px,3vw,174px)', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '12px', color: '#01847C', fontWeight: '600' }}>
                       ● Completed: <strong>{s.done}</strong>
                     </span>
@@ -1395,12 +1493,15 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
           </div>
         </div>
 
+        {/* ── Plan vs Actual Chart ── */}
+        {items.length > 0 && <PlanActualChart items={items} />}
+
         {/* ── ROW 4 + 5: Enhanced Detail Aktivitas ── */}
         <DetailAktivitas items={items} />
 
       </main>
 
-      <footer style={{ padding: '16px 32px', borderTop: '1px solid #E2E8F0', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <footer style={{ padding: '16px clamp(14px,3vw,32px)', borderTop: '1px solid #E2E8F0', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <span style={{ fontSize: '12px', color: '#94A3B8' }}>© 2026 Bank Syariah Indonesia · Dokumen Rahasia</span>
         <span style={{ fontSize: '12px', color: '#94A3B8' }}>Data diperbarui setiap 60 detik</span>
       </footer>
@@ -1408,6 +1509,33 @@ export default function FDRMasterPage({ user, onLogout, readOnly = false }) {
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ── FDR KPI grid ── */
+        .fdr-kpi-grid { grid-template-columns: minmax(180px,220px) 1fr 1fr 1fr; }
+        @media (max-width: 1024px) {
+          .fdr-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+          .fdr-kpi-grid > div:first-child { grid-column: 1 / -1; flex-direction: row !important; align-items: flex-start !important; gap: 20px; }
+        }
+        @media (max-width: 640px) {
+          .fdr-kpi-grid { grid-template-columns: 1fr !important; }
+          .fdr-kpi-grid > div:first-child { flex-direction: column !important; align-items: center !important; }
+        }
+
+        /* ── hide non-essential nav on mobile ── */
+        @media (max-width: 768px) {
+          .fdr-nav-hide { display: none !important; }
+        }
+
+        /* ── Progress per stage row: stack on mobile ── */
+        @media (max-width: 640px) {
+          .fdr-stage-row { flex-direction: column !important; gap: 8px !important; }
+          .fdr-stage-row > div:first-child { min-width: unset !important; }
+        }
+
+        /* ── Plan vs Actual: shrink label col ── */
+        @media (max-width: 640px) {
+          .fdr-plan-row { grid-template-columns: 80px 1fr auto !important; gap: 8px !important; }
+        }
       `}</style>
     </div>
   )

@@ -28,10 +28,8 @@ function groupStagesByName(stages = []) {
     'STAGE 5': { title: 'Stabilisasi',              phase: 'Post-Cutover'},
   }
 
-  // If stages already has 'events' field → already grouped, return as-is
   if (stages.length > 0 && stages[0].events !== undefined) return stages
 
-  // Group flat items by stage key
   const map = {}
   for (const s of stages) {
     const key = (s.stage || '').toUpperCase()
@@ -53,10 +51,8 @@ function groupStagesByName(stages = []) {
     g.not_started += s.not_started || 0
     g.total       += s.total       || 0
 
-    // Collect events
     if (s.event || s.events) {
       if (s.event) {
-        // flat row with event name — collect into events array
         const existing = g.events.find(e => e.event === s.event)
         if (!existing) {
           g.events.push({
@@ -74,7 +70,6 @@ function groupStagesByName(stages = []) {
     }
   }
 
-  // Recompute pcts per grouped stage
   return Object.values(map).map(g => {
     const t = g.total || 1
     g.done_pct        = Math.round((g.done / t) * 1000) / 10
@@ -86,7 +81,6 @@ function groupStagesByName(stages = []) {
   })
 }
 
-// ─── Compute overall stats dari items ────────────────────────────────────────
 function computeOverallFromItems(items = []) {
   const total      = items.length
   if (total === 0) return {}
@@ -94,10 +88,7 @@ function computeOverallFromItems(items = []) {
   const inProgress = items.filter(r => (r.Status || '').toLowerCase().includes('in progress')).length
   const notStarted = total - done - inProgress
   return {
-    total,
-    done,
-    in_progress: inProgress,
-    not_started: notStarted,
+    total, done, in_progress: inProgress, not_started: notStarted,
     done_pct:         (done        / total) * 100,
     in_progress_pct:  (inProgress  / total) * 100,
     not_started_pct:  (notStarted  / total) * 100,
@@ -109,7 +100,6 @@ function computeOverallFromItems(items = []) {
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 function daysUntil(dateStr) {
   if (!dateStr) return null
   const diff = new Date(dateStr) - new Date(new Date().toDateString())
@@ -128,7 +118,6 @@ function fmtDateShort(iso) {
   catch { return '—' }
 }
 
-// ─── Status style ─────────────────────────────────────────────────────────────
 function statusStyle(s = '') {
   const sl = (s || '').toLowerCase()
   if (sl === 'done')        return { bg: '#DCFCE7', color: '#166534', dot: '#16A34A', label: 'Done' }
@@ -143,6 +132,260 @@ function StatusChip({ status }) {
       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: s.dot, flexShrink: 0 }} />
       {s.label}
     </span>
+  )
+}
+
+// ─── Operational Readiness Status Mapping (mengganti RAG) ────────────────────
+function opStatus(raw = '') {
+  const r = (raw || '').toUpperCase()
+  // RAG legacy mapping → new labels
+  if (r === 'GREEN' || r === 'DONE')         return { key: 'done',        label: 'Done',        bg: '#DCFCE7', color: '#166534', border: '#BBF7D0', dot: '#16A34A', icon: '✅' }
+  if (r === 'AMBER' || r === 'IN_PROGRESS' || r === 'IN PROGRESS') return { key: 'in_progress', label: 'In Progress', bg: '#FEF9C3', color: '#92400E', border: '#FDE68A', dot: '#E8A030', icon: '🔄' }
+  if (r === 'RED'   || r === 'NOT_STARTED' || r === 'NOT STARTED') return { key: 'not_started', label: 'Not Started', bg: '#F1F5F9', color: '#475569', border: '#CBD5E1', dot: '#94A3B8', icon: '⏳' }
+  // default
+  return { key: 'not_started', label: 'Not Started', bg: '#F1F5F9', color: '#64748B', border: '#E2E8F0', dot: '#94A3B8', icon: '⏳' }
+}
+
+// ─── Enhanced Operational Readiness Card ─────────────────────────────────────
+function OperationalReadinessSection({ ops = [] }) {
+  if (!ops.length) return null
+
+  const counts = { done: 0, in_progress: 0, not_started: 0 }
+  ops.forEach(op => { counts[opStatus(op.status).key]++ })
+  const total = ops.length
+
+  return (
+    <div style={{
+      background: '#fff', borderRadius: '20px', padding: '28px 32px',
+      boxShadow: '0 2px 16px rgba(0,0,0,.08)', marginBottom: '24px',
+      border: '1px solid #E2E8F0',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Top accent stripe */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #01847C, #6DB5B9, #E8A030)' }} />
+
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #01847C, #016860)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🛡️</div>
+            <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#0F172A', letterSpacing: '-.3px' }}>Operational Readiness</h2>
+          </div>
+          <p style={{ fontSize: '12px', color: '#94A3B8', marginLeft: '46px' }}>Kesiapan operasional sebelum Go-Live — Diperbarui real-time</p>
+        </div>
+
+        {/* Summary counters */}
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {[
+            { label: 'Done',        count: counts.done,        bg: '#DCFCE7', color: '#166534', dot: '#16A34A' },
+            { label: 'In Progress', count: counts.in_progress, bg: '#FEF9C3', color: '#92400E', dot: '#E8A030' },
+            { label: 'Not Started', count: counts.not_started, bg: '#F1F5F9', color: '#475569', dot: '#94A3B8' },
+          ].map(s => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: s.bg, borderRadius: '10px', padding: '6px 14px', border: `1px solid ${s.dot}30` }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.dot }} />
+              <span style={{ fontSize: '13px', fontWeight: '800', color: s.color }}>{s.count}</span>
+              <span style={{ fontSize: '11px', color: s.color, opacity: .8 }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Progress bar summary */}
+      <div style={{ display: 'flex', gap: '0', height: '6px', borderRadius: '99px', overflow: 'hidden', marginBottom: '28px', background: '#F1F5F9' }}>
+        {counts.done > 0        && <div style={{ width: `${(counts.done / total) * 100}%`,        background: '#16A34A', transition: 'width .6s' }} />}
+        {counts.in_progress > 0 && <div style={{ width: `${(counts.in_progress / total) * 100}%`, background: '#E8A030', transition: 'width .6s' }} />}
+        {counts.not_started > 0 && <div style={{ width: `${(counts.not_started / total) * 100}%`, background: '#CBD5E1', transition: 'width .6s' }} />}
+      </div>
+
+      {/* Cards grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+        {ops.map((op, i) => {
+          const st = opStatus(op.status)
+          return (
+            <div key={i} style={{
+              borderRadius: '16px',
+              border: `1.5px solid ${st.border}`,
+              background: st.bg,
+              padding: '18px 20px',
+              position: 'relative', overflow: 'hidden',
+              boxShadow: `0 2px 12px ${st.dot}18`,
+              transition: 'transform .15s, box-shadow .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${st.dot}28` }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 2px 12px ${st.dot}18` }}
+            >
+              {/* Status stripe on left */}
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: st.dot, borderRadius: '16px 0 0 16px' }} />
+
+              <div style={{ paddingLeft: '8px' }}>
+                {/* Icon + status badge */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '24px' }}>{st.icon}</span>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '5px',
+                    background: '#fff', color: st.color,
+                    borderRadius: '99px', padding: '4px 12px',
+                    fontSize: '11px', fontWeight: '800',
+                    border: `1px solid ${st.border}`,
+                    boxShadow: '0 1px 4px rgba(0,0,0,.06)',
+                  }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: st.dot }} />
+                    {st.label}
+                  </span>
+                </div>
+
+                {/* Area name */}
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#0F172A', lineHeight: 1.3, marginBottom: '4px' }}>{op.area}</div>
+                {op.notes && (
+                  <div style={{ fontSize: '12px', color: st.color, opacity: .85, lineHeight: 1.4 }}>{op.notes}</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Plan vs Actual Chart ─────────────────────────────────────────────────────
+function PlanActualChart({ items = [] }) {
+  // Build per-stage plan vs actual from raw items
+  const stageOrder = ['Stage 0', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5']
+  const stageColors = {
+    'Stage 0': '#6366F1', 'Stage 1': '#0EA5E9', 'Stage 2': '#01847C',
+    'Stage 3': '#8B5CF6', 'Stage 4': '#E8A030', 'Stage 5': '#94A3B8',
+  }
+
+  // Aggregate per stage: planned duration total vs actual duration total
+  const agg = {}
+  stageOrder.forEach(s => {
+    agg[s] = { stage: s, planned: 0, actual: 0, done: 0, total: 0, early: 0, late: 0 }
+  })
+
+  items.forEach(r => {
+    const s = r.Stage || ''
+    if (!agg[s]) return
+    agg[s].total++
+    const status = (r.Status || '').toLowerCase()
+    if (status === 'done' || status.includes('done')) {
+      agg[s].done++
+      const pd = parseFloat(r['Planned Duration']) || 0
+      const ad = parseFloat(r['Actual Duration'])  || 0
+      if (pd > 0) agg[s].planned += pd
+      if (ad > 0) agg[s].actual  += ad
+      if (pd > 0 && ad > 0) {
+        if (ad < pd) agg[s].early++
+        else if (ad > pd * 1.1) agg[s].late++
+      }
+    }
+  })
+
+  const rows = stageOrder.map(s => agg[s]).filter(r => r.total > 0)
+  if (!rows.length) return null
+
+  // Find max for bar scaling
+  const maxVal = Math.max(...rows.map(r => Math.max(r.planned, r.actual)), 1)
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>Plan vs Actual Duration</h2>
+          <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Perbandingan durasi rencana vs aktual per stage (hanya aktivitas Done)</p>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {[
+            { color: '#01847C', label: 'Actual', dash: false },
+            { color: '#CBD5E1', label: 'Planned', dash: true },
+          ].map(l => (
+            <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '28px', height: '4px', background: l.dash ? `repeating-linear-gradient(90deg, ${l.color} 0 6px, transparent 6px 10px)` : l.color, borderRadius: '2px' }} />
+              <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '500' }}>{l.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {rows.map((r, i) => {
+          const planPct   = (r.planned / maxVal) * 100
+          const actualPct = (r.actual  / maxVal) * 100
+          const donePct   = r.total > 0 ? Math.round((r.done / r.total) * 100) : 0
+          const sc        = stageColors[r.stage] || '#94A3B8'
+          const delta     = r.planned > 0 ? ((r.actual - r.planned) / r.planned) * 100 : 0
+          const isAhead   = delta < -5
+          const isDelay   = delta > 10
+          const isDeltaNA = r.done === 0
+
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: '14px', alignItems: 'center' }}>
+              {/* Stage label */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <span style={{ background: sc, color: '#fff', borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{r.stage}</span>
+                <span style={{ fontSize: '10px', color: '#94A3B8', whiteSpace: 'nowrap' }}>{donePct}%</span>
+              </div>
+
+              {/* Dual bar */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {/* Planned bar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'right', fontSize: '9px', color: '#94A3B8', fontWeight: '600' }}>PLAN</div>
+                  <div style={{ flex: 1, height: '10px', background: '#F1F5F9', borderRadius: '99px', overflow: 'hidden' }}>
+                    {planPct > 0 && <div style={{ width: `${planPct}%`, height: '100%', background: '#CBD5E1', borderRadius: '99px', transition: 'width .8s ease' }} />}
+                  </div>
+                  <div style={{ width: '50px', flexShrink: 0, fontSize: '10px', color: '#94A3B8', fontFamily: 'monospace' }}>
+                    {r.planned > 0 ? `${Math.round(r.planned / 60)}h` : '—'}
+                  </div>
+                </div>
+                {/* Actual bar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'right', fontSize: '9px', color: '#01847C', fontWeight: '700' }}>ACT</div>
+                  <div style={{ flex: 1, height: '10px', background: '#F1F5F9', borderRadius: '99px', overflow: 'hidden' }}>
+                    {actualPct > 0 && <div style={{ width: `${actualPct}%`, height: '100%', background: sc, borderRadius: '99px', transition: 'width .8s ease' }} />}
+                  </div>
+                  <div style={{ width: '50px', flexShrink: 0, fontSize: '10px', color: '#0F172A', fontFamily: 'monospace', fontWeight: '600' }}>
+                    {r.actual > 0 ? `${Math.round(r.actual / 60)}h` : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Delta badge */}
+              <div style={{ minWidth: '90px', textAlign: 'right' }}>
+                {isDeltaNA ? (
+                  <span style={{ fontSize: '10px', color: '#94A3B8' }}>—</span>
+                ) : isAhead ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DBEAFE', color: '#1E40AF', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>
+                    ⚡ Lebih cepat {Math.abs(delta).toFixed(0)}%
+                  </span>
+                ) : isDelay ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#FEF3C7', color: '#92400E', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>
+                    ⚠ Delay {delta.toFixed(0)}%
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#DCFCE7', color: '#166534', borderRadius: '8px', padding: '3px 8px', fontSize: '10px', fontWeight: '800' }}>
+                    ✓ On-track
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend bottom */}
+      <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid #F1F5F9', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+        {[
+          { bg: '#DBEAFE', color: '#1E40AF', icon: '⚡', label: 'Lebih cepat dari plan' },
+          { bg: '#DCFCE7', color: '#166534', icon: '✓',  label: 'On-track (±10%)' },
+          { bg: '#FEF3C7', color: '#92400E', icon: '⚠',  label: 'Delay >10% dari plan' },
+        ].map(l => (
+          <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ background: l.bg, color: l.color, borderRadius: '6px', padding: '1px 6px', fontSize: '10px', fontWeight: '700' }}>{l.icon} {l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -267,21 +510,18 @@ function TodayActivities({ activities = [] }) {
             padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start',
             boxShadow: isActive ? '0 4px 16px rgba(232,160,48,.12)' : '0 1px 4px rgba(0,0,0,.04)',
           }}>
-            {/* Left: time */}
-            <div style={{ minWidth: '52px', textAlign: 'center', flexShrink: 0, background: '#F8FAFC', borderRadius: '8px', padding: '6px 8px', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', lineHeight: 1, fontFamily: 'monospace' }}>{fmtTime(act.planned_start)}</div>
-              <div style={{ fontSize: '9px', color: '#94A3B8', marginTop: '2px', fontWeight: '500' }}>→ {fmtTime(act.planned_end)}</div>
+            <div style={{ minWidth: '52px', textAlign: 'center', flexShrink: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A', fontFamily: 'monospace', lineHeight: 1.2 }}>{fmtTime(act.planned_start || act.plan_start)}</div>
+              <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '1px' }}>–{fmtTime(act.planned_end || act.plan_end)}</div>
             </div>
-            {/* Center */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px', flexWrap: 'wrap' }}>
-                {act.stage && <span style={{ background: stageColor, color: '#fff', borderRadius: '5px', padding: '1px 7px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{act.stage}</span>}
-                {act.event && <span style={{ fontSize: '10px', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{act.event}</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                <span style={{ background: stageColor, color: '#fff', borderRadius: '5px', padding: '1px 7px', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{act.stage}</span>
+                <span style={{ fontSize: '10px', color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{act.event}</span>
               </div>
-              <p style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, margin: 0 }}>{act.activity}</p>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', lineHeight: 1.4, marginBottom: '3px' }}>{act.activity}</div>
               {act.area && <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: '3px', margin: 0 }}>Area: {act.area}</p>}
             </div>
-            {/* Right: status */}
             <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: sc.bg, color: sc.color, borderRadius: '99px', padding: '2px 8px', fontSize: '10px', fontWeight: '700' }}>
                 <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: sc.dot }} />
@@ -298,7 +538,7 @@ function TodayActivities({ activities = [] }) {
   )
 }
 
-// ─── OJK Activities — grouped by unique stage ─────────────────────────────────
+// ─── OJK Activities ───────────────────────────────────────────────────────────
 const PHASE_COLOR = {
   'Pre-Cutover':  { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE' },
   'Cutover':      { bg: '#FFF7ED', text: '#C2410C', border: '#FED7AA' },
@@ -331,7 +571,6 @@ function OJKActivities({ stages = [] }) {
 
         return (
           <div key={si} style={{ borderRadius: '12px', border: `1px solid ${isOpen ? '#01847C30' : '#E2E8F0'}`, overflow: 'hidden', boxShadow: isOpen ? '0 2px 12px rgba(1,132,124,.08)' : 'none' }}>
-            {/* Stage header */}
             <div onClick={() => setOpenStage(p => p === si ? null : si)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', cursor: 'pointer', background: isOpen ? '#F8FFFE' : '#fff', transition: 'background .15s' }}>
               <div style={{ flexShrink: 0, borderRadius: '8px', padding: '4px 10px', background: '#0F172A', color: '#fff', fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' }}>{stage.stage}</div>
               <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#0F172A', minWidth: 0 }}>{stage.title || stage.stage}</span>
@@ -340,15 +579,11 @@ function OJKActivities({ stages = [] }) {
               <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '99px', whiteSpace: 'nowrap', flexShrink: 0, background: ss.bg, color: ss.color }}>{ss.label}</span>
               <span style={{ fontSize: '14px', color: '#94A3B8', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }}>›</span>
             </div>
-
-            {/* Progress bar */}
             {progPct > 0 && (
               <div style={{ height: '3px', background: '#F1F5F9' }}>
                 <div style={{ height: '100%', width: `${progPct}%`, background: '#01847C', transition: 'width .6s' }} />
               </div>
             )}
-
-            {/* Expanded events */}
             {isOpen && (
               <div style={{ borderTop: '1px solid #F1F5F9', background: '#FAFCFF' }}>
                 {(stage.events || []).length === 0 ? (
@@ -386,7 +621,6 @@ function OJKActivities({ stages = [] }) {
                     </div>
                   )
                 })}
-                {/* Stage summary footer */}
                 <div style={{ padding: '10px 16px', display: 'flex', gap: '16px', background: '#F8FAFC', borderTop: '1px solid #F1F5F9' }}>
                   <span style={{ fontSize: '11px', color: '#01847C', fontWeight: '600' }}>✓ Done: {stage.done}</span>
                   <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ In Progress: {stage.in_progress}</span>
@@ -435,7 +669,7 @@ function FDRStageBar({ stage }) {
         {iPct > 0 && <div style={{ width: `${iPct}%`, background: '#E8A030' }} />}
         {nPct > 0 && <div style={{ width: `${nPct}%`, background: '#E2E8F0' }} />}
       </div>
-      <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+      <div style={{ display: 'flex', gap: '16px', marginTop: '8px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', color: '#01847C', fontWeight: '600' }}>✓ Done: {cPct}%</span>
         <span style={{ fontSize: '11px', color: '#E8A030', fontWeight: '600' }}>⚙ Progress: {iPct}%</span>
         <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '500' }}>○ Not Started: {nPct}%</span>
@@ -501,15 +735,12 @@ export default function DashboardPage({ user, onLogout }) {
 
   if (loading && !ojkData && !fdrData) return <Skeleton />
 
-  // ── Data merging ──
   const fdrItems  = fdrData?.items  || []
   const fdrOverall = fdrData?.overall || {}
   const ojkOverall = ojkData?.overall || {}
 
-  // Active stage key e.g. "STAGE 0"
   const activeStageKey = filterStage !== null ? `STAGE ${filterStage}` : null
 
-  // Filtered items for recomputed stats
   const filteredItems = activeStageKey
     ? fdrItems.filter(r => (r.Stage || '').toUpperCase() === activeStageKey)
     : fdrItems
@@ -519,24 +750,19 @@ export default function DashboardPage({ user, onLogout }) {
     : fdrOverall.total ? fdrOverall : ojkOverall
   const o = computedOverall
 
-  // ── Stages: group raw fdrStages into unique stage objects ──
   const rawFdrStages = fdrData?.stages || []
   const ojkStages    = ojkData?.stages || []
 
-  // groupStagesByName handles both flat-event and already-grouped arrays
-  const groupedFdrStages = groupStagesByName(rawFdrStages)
+  const groupedFdrStages = groupStagesByName(rawFdrStages.length > 0 ? rawFdrStages : ojkStages)
 
-  // Filter grouped stages by active stage pill
   const filteredStages = activeStageKey
     ? groupedFdrStages.filter(s => (s.stage || '').toUpperCase() === activeStageKey)
-    : groupedFdrStages
+    : []
 
-  // For OJK Activities: same filtered grouped stages
   const ojkActivityStages = filteredStages.length > 0
     ? filteredStages
     : (groupedFdrStages.length > 0 ? groupedFdrStages : [])
 
-  // Today activities filtered by stage
   const allTodayActs      = fdrData?.today_activities || todayActs
   const filteredTodayActs = activeStageKey
     ? allTodayActs.filter(a => (a.stage || '').toUpperCase() === activeStageKey)
@@ -552,34 +778,33 @@ export default function DashboardPage({ user, onLogout }) {
   const goLive = cal.find(c => c.type === 'golive')
   const dGoLive = goLive ? daysUntil(goLive.date) : null
 
-  // For Stage Progress bar section: use filtered grouped stages or ojkStages
   const stageBarData = filteredStages.length > 0
     ? filteredStages
     : (groupedFdrStages.length > 0 ? [] : ojkStages)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div id="dashboard-main" style={{ minHeight: '100vh', background: '#F0F4F8', display: 'flex', flexDirection: 'column', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* ── TOP NAV ── */}
-      <nav style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 8px rgba(0,0,0,.06)' }}>
+      <nav style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '0 clamp(12px,3vw,32px)', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 8px rgba(0,0,0,.06)', flexWrap: 'wrap', gap: '8px', minHeight: '64px', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#01847C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '13px' }}>BSI</div>
           <div>
             <div style={{ fontWeight: '700', fontSize: '15px', color: '#0F172A', lineHeight: 1.2 }}>NEOM Dashboard</div>
-            <div style={{ fontSize: '11px', color: '#64748B' }}>Core Banking Upgrade · OJK View</div>
+            <div style={{ fontSize: '11px', color: '#64748B' }}>Core Banking Upgrade · Bank Syariah Indonesia</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ width: '8px', height: '8px', background: '#16A34A', borderRadius: '50%', display: 'inline-block', animation: 'blink 1.5s infinite' }} />
             <span style={{ fontSize: '12px', color: '#16A34A', fontWeight: '600' }}>Live</span>
           </div>
-          {lastRefresh && <span style={{ fontSize: '12px', color: '#94A3B8' }}>Update: {lastRefresh.toLocaleTimeString('id-ID')}</span>}
-          <button onClick={handleDownload} disabled={downloading} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', border: 'none', borderRadius: '10px', background: '#E8A030', color: '#fff', fontWeight: '600', fontSize: '13px', cursor: downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: downloading ? .7 : 1 }}>
-            {downloading ? '⏳' : '⬇️'} Download PDF
+          {lastRefresh && <span className="nav-hide-mobile" style={{ fontSize: '12px', color: '#94A3B8' }}>Update: {lastRefresh.toLocaleTimeString('id-ID')}</span>}
+          <button onClick={handleDownload} disabled={downloading} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', border: 'none', borderRadius: '10px', background: '#E8A030', color: '#fff', fontWeight: '600', fontSize: '12px', cursor: downloading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: downloading ? .7 : 1 }}>
+            {downloading ? '⏳' : '⬇️'} <span className="nav-hide-mobile">Download PDF</span>
           </button>
           {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px', border: '1px solid #E2E8F0' }}>
+            <div className="nav-hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F8FAFC', borderRadius: '10px', padding: '6px 12px', border: '1px solid #E2E8F0' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#01847C', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '11px' }}>{user?.name?.[0] || 'U'}</div>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: '#0F172A', lineHeight: 1.2 }}>{user?.name}</div>
@@ -588,20 +813,20 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
           )}
           <button onClick={() => { sessionStorage.removeItem('neom_token'); onLogout() }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', border: '1.5px solid #FCA5A5', borderRadius: '10px', background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', border: '1.5px solid #FCA5A5', borderRadius: '10px', background: '#FFF1F1', color: '#DC2626', fontWeight: '700', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
             onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.color = '#fff' }}
             onMouseLeave={e => { e.currentTarget.style.background = '#FFF1F1'; e.currentTarget.style.color = '#DC2626' }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
-            Keluar
+            <span className="nav-hide-mobile">Keluar</span>
           </button>
         </div>
       </nav>
 
       {/* ── HEADER BANNER ── */}
-      <div style={{ background: 'linear-gradient(135deg, #01847C 0%, #016860 50%, #0F172A 100%)', padding: '28px 32px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ background: 'linear-gradient(135deg, #01847C 0%, #016860 50%, #0F172A 100%)', padding: 'clamp(16px,3vw,28px) clamp(14px,3vw,32px)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, opacity: .05, backgroundImage: 'linear-gradient(rgba(255,255,255,.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.8) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -609,8 +834,8 @@ export default function DashboardPage({ user, onLogout }) {
               <span style={{ background: 'rgba(232,160,48,.2)', color: '#E8A030', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '700', border: '1px solid rgba(232,160,48,.3)' }}>CONFIDENTIAL</span>
               <span style={{ background: 'rgba(255,255,255,.1)', color: 'rgba(255,255,255,.7)', padding: '3px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: '600' }}>{ojkData?.location || 'Jakarta, Indonesia'}</span>
             </div>
-            <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>{ojkData?.project_name || 'NEOM Core Banking Upgrade'}</h1>
-            <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '13px', marginTop: '6px' }}>Laporan Progress untuk Otoritas Jasa Keuangan (OJK)</p>
+            <h1 style={{ color: '#fff', fontSize: 'clamp(18px,3vw,28px)', fontWeight: '800', letterSpacing: '-.5px', lineHeight: 1.1 }}>{ojkData?.project_name || 'NEOM Core Banking Upgrade'}</h1>
+            <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '13px', marginTop: '6px' }}>Laporan Progress Upgrade Core Banking</p>
           </div>
           <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
             <div style={{ textAlign: 'right' }}>
@@ -637,7 +862,7 @@ export default function DashboardPage({ user, onLogout }) {
       </div>
 
       {/* ── MAIN BODY ── */}
-      <main style={{ padding: '28px 32px', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+      <main style={{ padding: 'clamp(14px,2.5vw,28px) clamp(14px,2.5vw,32px)', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
 
         {/* Stage filter pills */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -649,8 +874,8 @@ export default function DashboardPage({ user, onLogout }) {
         </div>
 
         {/* ── ROW 1: KPI Cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '28px 24px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '210px' }}>
+        <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,220px) 1fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+          <div style={{ background: '#fff', borderRadius: '20px', padding: '28px 24px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ fontWeight: '700', fontSize: '14px', color: '#0F172A', alignSelf: 'flex-start', marginBottom: '14px' }}>Upgrade Progress</div>
             <DonutChart completed={o.done_pct || o.completed_pct || 0} inProgress={o.in_progress_pct || 0} notStarted={o.not_started_pct || 0} />
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '14px' }}>
@@ -713,7 +938,10 @@ export default function DashboardPage({ user, onLogout }) {
           </div>
         </div>
 
-        {/* ── ROW 3: Gantt (full width) ── */}
+        {/* ── Plan vs Actual Chart (only when FDR items available) ── */}
+        {fdrItems.length > 0 && <PlanActualChart items={fdrItems} />}
+
+        {/* ── ROW 3: Gantt ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
             <div>
@@ -727,7 +955,7 @@ export default function DashboardPage({ user, onLogout }) {
           <GanttTimeline />
         </div>
 
-        {/* ── ROW 4: Aktivitas Hari Ini (full width) ── */}
+        {/* ── ROW 4: Aktivitas Hari Ini ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px', border: '2px solid rgba(1,132,124,.15)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -744,11 +972,11 @@ export default function DashboardPage({ user, onLogout }) {
           <TodayActivities activities={filteredTodayActs} />
         </div>
 
-        {/* ── ROW 5: OJK Activities (full width) ── */}
+        {/* ── ROW 5: OJK Activities ── */}
         <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A' }}>
-              Aktivitas per Stage — OJK View
+              Aktivitas per Stage — Bank Syariah Indonesia
               {groupedFdrStages.length > 0 && (
                 <span style={{ fontSize: '11px', fontWeight: '500', color: '#94A3B8', marginLeft: '8px' }}>
                   dari Excel FDR · {ojkActivityStages.length} stage
@@ -765,23 +993,8 @@ export default function DashboardPage({ user, onLogout }) {
           <OJKActivities stages={ojkActivityStages} />
         </div>
 
-        {/* ── ROW 5: Operational Readiness ── */}
-        {ops.length > 0 && (
-          <div style={{ background: '#fff', borderRadius: '20px', padding: '24px 28px', boxShadow: '0 1px 8px rgba(0,0,0,.06)', marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0F172A', marginBottom: '16px' }}>Operational Readiness</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
-              {ops.map((op, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #F1F5F9' }}>
-                  <div>
-                    <div style={{ fontWeight: '600', fontSize: '14px', color: '#0F172A' }}>{op.area}</div>
-                    {op.notes && <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>{op.notes}</div>}
-                  </div>
-                  <RAGBadge status={op.status} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* ── ROW 6: Operational Readiness (Eye-catching for Regulator) ── */}
+        <OperationalReadinessSection ops={ops} />
 
       </main>
 
@@ -799,6 +1012,44 @@ export default function DashboardPage({ user, onLogout }) {
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 99px; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+
+        /* ── Responsive KPI grid ── */
+        .kpi-grid {
+          grid-template-columns: minmax(180px,220px) 1fr 1fr 1fr;
+        }
+        @media (max-width: 1024px) {
+          .kpi-grid {
+            grid-template-columns: 1fr 1fr !important;
+          }
+          .kpi-grid > div:first-child {
+            grid-column: 1 / -1;
+            flex-direction: row !important;
+            align-items: flex-start !important;
+            gap: 24px;
+          }
+          .kpi-grid > div:first-child > div[style*="flex-direction: column"] {
+            flex: 1;
+          }
+        }
+        @media (max-width: 640px) {
+          .kpi-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .kpi-grid > div:first-child {
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+        }
+
+        /* ── Hide secondary nav items on small screens ── */
+        @media (max-width: 768px) {
+          .nav-hide-mobile { display: none !important; }
+        }
+
+        /* ── Stage filter pills wrap on small screens ── */
+        @media (max-width: 480px) {
+          .stage-pills button { font-size: 11px !important; padding: 4px 10px !important; }
+        }
       `}</style>
     </div>
   )
