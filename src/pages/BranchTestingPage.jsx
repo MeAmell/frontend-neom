@@ -169,32 +169,61 @@ function BranchRow({ branch, onClickFailed }) {
 
 function FailedModal({ branch, onClose }) {
   if (!branch) return null
+  const tcs = branch.failed_tcs || []
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px', padding: '28px', width: '100%', maxWidth: '560px', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '12px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '580px', maxHeight: '85vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
             <div style={{ fontWeight: '700', fontSize: '16px', color: '#0F172A' }}>{branch.kantor_cabang}</div>
             <div style={{ fontSize: '12px', color: C.slate, marginTop: '2px' }}>{branch.regional}{branch.area ? ` · ${branch.area}` : ''}{branch.kode_cabang ? ` · ${branch.kode_cabang}` : ''}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', color: C.muted, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', color: C.muted, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>×</button>
         </div>
-        <div style={{ background: C.failedBg, borderRadius: '12px', padding: '14px 16px', marginBottom: '18px', border: '1px solid #FECDD3' }}>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: C.failedDark, marginBottom: '4px' }}>{branch.failed_tcs?.length} Test Case On Progress / Failed</div>
-          {branch.keterangan && branch.keterangan !== '-' && <div style={{ fontSize: '12px', color: C.failedDark, marginTop: '4px', opacity: .8 }}>Keterangan: {branch.keterangan}</div>}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {branch.failed_tcs?.map((tc, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', background: '#FFF8F9', borderRadius: '10px', border: '1px solid #FCE7EB' }}>
-              <span style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#FECDD3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '800', color: C.failedDark, flexShrink: 0 }}>{tc.tc_id}</span>
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A' }}>{tc.tc_name}</div>
-                <div style={{ fontSize: '11px', color: C.failedDark, marginTop: '2px' }}>Result: {tc.result}</div>
-              </div>
+
+        <div style={{ background: C.failedBg, borderRadius: '12px', padding: '14px 16px', marginBottom: '16px', border: '1px solid #FECDD3' }}>
+          <div style={{ fontSize: '13px', fontWeight: '700', color: C.failedDark }}>
+            {tcs.length} Test Case On Progress / Failed
+          </div>
+          {branch.keterangan && branch.keterangan !== '-' && (
+            <div style={{ fontSize: '12px', color: C.failedDark, marginTop: '6px', opacity: .85 }}>
+              Keterangan: {branch.keterangan}
             </div>
-          ))}
+          )}
         </div>
-        <button onClick={onClose} style={{ width: '100%', marginTop: '22px', padding: '11px', borderRadius: '10px', background: C.teal, color: '#fff', border: 'none', fontWeight: '600', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>Tutup</button>
+
+        {tcs.length === 0 ? (
+          <div style={{ fontSize: '12px', color: C.muted, padding: '8px 0' }}>Tidak ada detail test case</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {tcs.map((tc, i) => (
+              <div key={i} style={{ background: '#FFF8F9', borderRadius: '10px', border: '1px solid #FCE7EB', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px' }}>
+                  <span style={{ width: '26px', height: '26px', borderRadius: '7px', background: '#FECDD3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '800', color: C.failedDark, flexShrink: 0 }}>
+                    {tc.tc_id}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#0F172A', wordBreak: 'break-word' }}>{tc.tc_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', color: C.failedDark }}>Result: {tc.result || 'Fail'}</span>
+                      {tc.issue_status && (
+                        <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '99px', background: '#FEF3C7', color: '#92400E', fontWeight: '700', border: '1px solid #FDE68A' }}>
+                          {tc.issue_status}
+                        </span>
+                      )}
+                    </div>
+                    {tc.keterangan && tc.keterangan !== '0' && tc.keterangan !== '' && (
+                      <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', background: '#F8FAFC', borderRadius: '6px', padding: '5px 8px', wordBreak: 'break-word' }}>
+                        💬 {tc.keterangan}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} style={{ width: '100%', marginTop: '20px', padding: '11px', borderRadius: '10px', background: C.teal, color: '#fff', border: 'none', fontWeight: '600', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>Tutup</button>
       </div>
     </div>
   )
@@ -216,10 +245,11 @@ function OverallProgressSection({ exaData, t24Data }) {
   const t24OnProg = t24Data?.failed || 0
   const t24NS     = t24Data?.not_started || 0
 
-  const grandTotal  = exaTotal + t24Total
-  const grandDone   = exaDone + t24Done
-  const grandOnProg = exaOnProg + t24OnProg
-  const grandNS     = exaNS + t24NS
+  // EXA = semua cabang unik. T24 adalah subset BOC — dijumlah = dobel hitung.
+  const grandTotal  = exaTotal
+  const grandDone   = exaDone
+  const grandOnProg = exaOnProg
+  const grandNS     = exaNS
   const grandTested = grandDone + grandOnProg
 
   const testedPct  = grandTotal > 0 ? Math.round((grandTested / grandTotal) * 100) : 0
@@ -261,11 +291,11 @@ function OverallProgressSection({ exaData, t24Data }) {
         </div>
 
         {/* Legend cards + channel breakdown side by side */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '28px', alignItems: 'start' }}>
+        <div className="bt-overall-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '28px', alignItems: 'start' }}>
 
           <div>
             {/* 3 Legend cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div className="bt-legend-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
               {[
                 { label: 'Done',        count: grandDone,   pct: donePct,   bg: '#DCFCE7', color: '#166534', dot: '#16A34A', icon: '✅', desc: 'Semua TC passed' },
                 { label: 'On Progress', count: grandOnProg, pct: onProgPct, bg: '#FEF9C3', color: '#92400E', dot: '#E8A030', icon: '🔄', desc: 'Ada TC gagal / in progress' },
@@ -307,7 +337,7 @@ function OverallProgressSection({ exaData, t24Data }) {
           </div>
 
           {/* Right: Per-channel breakdown */}
-          <div style={{ minWidth: '260px' }}>
+          <div className="bt-per-channel" style={{ minWidth: '260px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: '#0F172A', marginBottom: '12px' }}>Per Channel</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {channels.map(ch => {
@@ -581,10 +611,10 @@ export default function BranchTestingPage({ user, onLogout, hideSidebar }) {
 
   const exa = data?.exa
   const t24 = data?.t24
-  const totalSubmit   = (exa?.total_branches || 0) + (t24?.total_branches || 0)
-  const totalPassed   = (exa?.passed || 0) + (t24?.passed || 0)
-  const totalFailed   = (exa?.failed || 0) + (t24?.failed || 0)
-  const totalNotStart = (exa?.not_started || 0) + (t24?.not_started || 0)
+  const totalSubmit   = (exa?.total_branches || 0)  // EXA = semua cabang unik
+  const totalPassed   = (exa?.passed || 0)
+  const totalFailed   = (exa?.failed || 0)
+  const totalNotStart = (exa?.not_started || 0)
   const totalTested   = totalPassed + totalFailed
   const overallTestedPct = totalSubmit > 0 ? Math.round((totalTested / totalSubmit) * 100) : 0
 
@@ -649,7 +679,7 @@ export default function BranchTestingPage({ user, onLogout, hideSidebar }) {
       </div>
 
       <main style={{ padding: 'clamp(14px,2.5vw,28px) clamp(14px,2.5vw,32px)', flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
-        <UploadBTPanel onSuccess={load} />
+        {user?.role === 'admin' && <UploadBTPanel onSuccess={load} />}
         <OverallProgressSection exaData={exa} t24Data={t24} />
 
         <div className="bt-summary-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '24px' }}>
@@ -675,15 +705,23 @@ export default function BranchTestingPage({ user, onLogout, hideSidebar }) {
 
         @media (max-width: 768px) {
           .bt-nav-hide { display: none !important; }
+          .bt-overall-grid { grid-template-columns: 1fr !important; }
+          .bt-per-channel { min-width: unset !important; width: 100% !important; }
+          .bt-channel-header { flex-direction: column !important; gap: 12px !important; }
+          .bt-channel-stats { flex-wrap: wrap !important; justify-content: flex-start !important; }
         }
         @media (max-width: 900px) {
           .bt-summary-grid { grid-template-columns: repeat(2,1fr) !important; }
           .bt-mini-stats   { grid-template-columns: repeat(2,1fr) !important; }
           .bt-two-col      { grid-template-columns: 1fr !important; }
           .bt-two-col > div:first-child { border-right: none !important; border-bottom: 1px solid #E2E8F0; }
+          .bt-overall-right { display: none !important; }
+          .bt-legend-cards { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 480px) {
           .bt-summary-grid { grid-template-columns: 1fr 1fr !important; }
+          .bt-channel-tabs { flex-direction: column !important; }
+          .bt-channel-tabs button { width: 100% !important; border-radius: 12px !important; }
         }
       `}</style>
     </div>
