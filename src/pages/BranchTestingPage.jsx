@@ -353,7 +353,7 @@ function OverallProgressSection({ exaData, t24Data }) {
                         <span style={{ background: ch.color, color: '#fff', borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: '800' }}>{ch.name}</span>
                         <span style={{ fontSize: '10px', color: C.muted }}>{ch.tc} TC · {ch.total} branch</span>
                       </div>
-                      <span style={{ fontSize: '13px', fontWeight: '800', color: ch.color }}>{chTestedP}%</span>
+                      <span style={{ fontSize: '13px', fontWeight: '800', color: ch.color }}>{chDoneP}%</span>
                     </div>
                     <div style={{ height: '7px', borderRadius: '99px', overflow: 'hidden', background: '#E2E8F0', display: 'flex', marginBottom: '6px' }}>
                       {chDoneP   > 0 && <div style={{ width: `${chDoneP}%`,   background: '#16A34A' }} />}
