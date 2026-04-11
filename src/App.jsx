@@ -24,10 +24,13 @@ export default function App() {
 
   const role = user.role
 
-  if (role === 'viewer') return <DashboardPage user={user} onLogout={logout} />
-  if (role === 'branch') return <BranchTestingPage user={user} onLogout={logout} />
-  if (role === 'presenter') return <FDRMasterPage user={user} onLogout={logout} readOnly={true} />
+  // ── Single-page roles (no sidebar) ────────────────────────────────────────
+  if (role === 'viewer')     return <DashboardPage     user={user} onLogout={logout} />
+  if (role === 'presenter')  return <FDRMasterPage     user={user} onLogout={logout} readOnly={true} />
+  if (role === 'bod_fdr')    return <FDRMasterPage     user={user} onLogout={logout} readOnly={true} />
+  if (role === 'bod_branch') return <BranchTestingPage user={user} onLogout={logout} readOnly={true} />
 
+  // ── Admin: full sidebar layout ─────────────────────────────────────────────
   if (role === 'admin') {
     return (
       <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -121,7 +124,7 @@ export default function App() {
             zIndex: 300, background: '#01847C', color: '#fff',
             border: 'none', borderRadius: '10px',
             width: '38px', height: '38px',
-            display: 'none', /* shown via CSS */
+            display: 'none',
             alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', fontSize: '18px',
             boxShadow: '0 2px 8px rgba(1,132,124,.4)',
@@ -133,10 +136,10 @@ export default function App() {
         {/* Main content */}
         <div className="app-main-content" style={{ marginLeft: '200px', flex: 1, minWidth: 0 }}>
           {activePage === 'ojk'
-            ? <DashboardPage    user={user} onLogout={logout} hideSidebar />
+            ? <DashboardPage     user={user} onLogout={logout} hideSidebar />
             : activePage === 'branch'
             ? <BranchTestingPage user={user} onLogout={logout} hideSidebar />
-            : <FDRMasterPage    user={user} onLogout={logout} hideSidebar />
+            : <FDRMasterPage     user={user} onLogout={logout} hideSidebar />
           }
         </div>
 
@@ -153,5 +156,6 @@ export default function App() {
     )
   }
 
+  // ── Fallback: role tidak dikenal → kembali ke login ────────────────────────
   return <LoginPage onLogin={login} />
 }
